@@ -5,7 +5,7 @@ import (
 )
 
 type Repository struct {
-    ID        int       `json:"id"`
+    ID        int       `json:"id,omitempty"`
     UserID    int       `json:"user_id"`    // Relasi ke User
     Name      string    `json:"name"`
     URL       string    `json:"url"`

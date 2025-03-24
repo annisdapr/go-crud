@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"log"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -35,6 +36,18 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
+}
+
+// GetAllUsers (GET /users)
+func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.UserUC.GetAllUsers(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
 }
 
 // Get User by ID (GET /users/{id})
@@ -92,5 +105,10 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	// Kirim respons sukses dengan JSON
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": fmt.Sprintf("User dengan ID %d berhasil dihapus", id),
+	})
 }
+

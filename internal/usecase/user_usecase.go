@@ -13,6 +13,7 @@ type IUserUsecase interface {
     GetUserByID(ctx context.Context, id int) (*entity.User, error)
     UpdateUser(ctx context.Context, id int, input UserInput) (entity.User, error)
     DeleteUser(ctx context.Context, id int) error
+	GetAllUsers(ctx context.Context) ([]entity.User, error) 
 }
 
 // UserUsecase mengelola logika bisnis untuk User
@@ -31,6 +32,11 @@ func NewUserUsecase(userRepo repository.UserRepository) IUserUsecase {
     return &UserUsecase{UserRepo: userRepo}
 }
 
+
+// GetAllUsers mengambil semua data user dari database
+func (uc *UserUsecase) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	return uc.UserRepo.GetAllUsers(ctx)
+}
 
 // CreateUser menambahkan user baru ke database
 func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error {

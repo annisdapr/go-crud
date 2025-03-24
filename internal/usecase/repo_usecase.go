@@ -13,6 +13,7 @@ type IRepositoryUsecase interface {
 	GetRepositoryByID(ctx context.Context, id int) (*entity.Repository, error)
 	UpdateRepository(ctx context.Context, id int, input RepositoryInput) (entity.Repository, error)
 	DeleteRepository(ctx context.Context, id int) error
+	GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error)
 }
 
 // Struct RepositoryUsecase
@@ -43,6 +44,17 @@ func (u *RepositoryUsecase) CreateRepository(ctx context.Context, repo *entity.R
 
 	return u.repoRepo.CreateRepository(ctx, repo)
 }
+
+func (u *RepositoryUsecase) GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error) {
+	// Pastikan user ada sebelum mengambil repositorinya
+	_, err := u.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	return u.repoRepo.GetRepositoriesByUserID(ctx, userID)
+}
+
 
 func (u *RepositoryUsecase) GetRepositoryByID(ctx context.Context, id int) (*entity.Repository, error) {
 	return u.repoRepo.GetRepositoryByID(ctx, id)

@@ -1,0 +1,795 @@
+{
+	"info": {
+		"_postman_id": "98b3937b-18f4-4468-a9af-c1289a96f69e",
+		"name": "GO-CRUD",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "33533197"
+	},
+	"item": [
+		{
+			"name": "User",
+			"item": [
+				{
+					"name": "Add user",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"name\": \"hoho\",\r\n  \"email\": \"haha@mail.com\"\r\n}\r\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}/users",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"users"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Add user",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"name\": \"tes123\",\r\n  \"email\": \"tes@mail.com\"\r\n}\r\n",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{local}}/users",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 08:07:51 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "146"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": "",
+									"type": "text"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"id\": 4,\n    \"name\": \"tes123\",\n    \"email\": \"tes@mail.com\",\n    \"created_at\": \"2025-03-24T15:07:51.7402314+07:00\",\n    \"updated_at\": \"2025-03-24T15:07:51.7402314+07:00\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "",
+								"value": "",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{local}}/users/1",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"users",
+								"1"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "{{local}}/users",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{local}}/users/1",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users",
+										"1"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 08:06:45 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "136"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": "",
+									"type": "text"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"id\": 1,\n    \"name\": \"test\",\n    \"email\": \"test@example.com\",\n    \"created_at\": \"2025-03-24T00:43:01.416695Z\",\n    \"updated_at\": \"2025-03-24T00:43:01.416695Z\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"name\":\"john\",\r\n    \"email\":\"test@example.com\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}/users/1",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"users",
+								"1"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Update User",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"name\":\"john\",\r\n    \"email\":\"test@example.com\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{local}}/users/1",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users",
+										"1"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 08:37:05 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "142"
+								},
+								{
+									"key": "Content-Type",
+									"value": "text/plain; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "{\"id\":1,\"name\":\"john\",\"email\":\"test@example.com\",\"created_at\":\"2025-03-24T00:43:01.416695Z\",\"updated_at\":\"2025-03-24T15:37:05.5564726+07:00\"}\n"
+						}
+					]
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{local}}/users/3",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"users",
+								"3"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Delete User",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{local}}/users/3",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users",
+										"3"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 16:28:47 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "48"
+								},
+								{
+									"key": "Content-Type",
+									"value": "text/plain; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "{\"message\":\"User dengan ID 3 berhasil dihapus\"}\n"
+						}
+					]
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{local}}/users",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"users"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Get All Users",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{local}}/users",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 17:34:47 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "135"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"id\": 1,\n        \"name\": \"hoho\",\n        \"email\": \"haha@mail.com\",\n        \"created_at\": \"2025-03-24T17:27:08.275631Z\",\n        \"updated_at\": \"2025-03-24T17:27:08.275631Z\"\n    }\n]"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Repo",
+			"item": [
+				{
+					"name": "Add Repo",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[\r\n    {   \r\n    \"user_id\": 1,\r\n    \"name\": \"Golang\",\r\n    \"url\": \"https://github.com/example/go-lang\",\r\n    \"ai_enabled\": true\r\n    },\r\n    { \r\n    \"id\" :10, \r\n    \"user_id\": 1,\r\n    \"name\": \"Golang\",\r\n    \"url\": \"https://github.com/example/go-lang\",\r\n    \"ai_enabled\": true\r\n    }\r\n]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}/users/1/repositories",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"users",
+								"1",
+								"repositories"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Add Repo",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "[\r\n  {\r\n    \"id\": 1,\r\n    \"user_id\": 1,\r\n    \"name\": \"Go API\",\r\n    \"url\": \"https://github.com/example/go-api\",\r\n    \"ai_enabled\": true\r\n  },\r\n  {\r\n    \"id\": 2,\r\n    \"user_id\": 1,\r\n    \"name\": \"Another Repo\",\r\n    \"url\": \"https://github.com/example/another-repo\",\r\n    \"ai_enabled\": false\r\n  }\r\n]\r\n",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{local}}/users/1/repositories",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users",
+										"1",
+										"repositories"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 16:25:32 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "353"
+								},
+								{
+									"key": "Content-Type",
+									"value": "text/plain; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "[{\"id\":1,\"user_id\":1,\"name\":\"Go API\",\"url\":\"https://github.com/example/go-api\",\"ai_enabled\":true,\"created_at\":\"0001-01-01T00:00:00Z\",\"updated_at\":\"0001-01-01T00:00:00Z\"},{\"id\":2,\"user_id\":1,\"name\":\"Another Repo\",\"url\":\"https://github.com/example/another-repo\",\"ai_enabled\":false,\"created_at\":\"0001-01-01T00:00:00Z\",\"updated_at\":\"0001-01-01T00:00:00Z\"}]\n"
+						},
+						{
+							"name": "Add Repo",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "[\r\n    {   \r\n    \"user_id\": 1,\r\n    \"name\": \"Golang\",\r\n    \"url\": \"https://github.com/example/go-lang\",\r\n    \"ai_enabled\": true\r\n    },\r\n    { \r\n    \"id\" :10, \r\n    \"user_id\": 1,\r\n    \"name\": \"Golang\",\r\n    \"url\": \"https://github.com/example/go-lang\",\r\n    \"ai_enabled\": true\r\n    }\r\n]",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{local}}/users/1/repositories",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users",
+										"1",
+										"repositories"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 16:47:17 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "342"
+								},
+								{
+									"key": "Content-Type",
+									"value": "text/plain; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "[{\"id\":4,\"user_id\":1,\"name\":\"Golang\",\"url\":\"https://github.com/example/go-lang\",\"ai_enabled\":true,\"created_at\":\"0001-01-01T00:00:00Z\",\"updated_at\":\"0001-01-01T00:00:00Z\"},{\"id\":5,\"user_id\":1,\"name\":\"Golang\",\"url\":\"https://github.com/example/go-lang\",\"ai_enabled\":true,\"created_at\":\"0001-01-01T00:00:00Z\",\"updated_at\":\"0001-01-01T00:00:00Z\"}]\n"
+						}
+					]
+				},
+				{
+					"name": "Get Repo by User ID",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{local}}/users/1/repositories",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"users",
+								"1",
+								"repositories"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Get Repo by User ID",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{local}}/users/1/repositories",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"users",
+										"1",
+										"repositories"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 16:31:28 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "381"
+								},
+								{
+									"key": "Content-Type",
+									"value": "text/plain; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "[{\"id\":1,\"user_id\":1,\"name\":\"Go API\",\"url\":\"https://github.com/example/go-api\",\"ai_enabled\":true,\"created_at\":\"2025-03-24T23:25:32.109918Z\",\"updated_at\":\"2025-03-24T23:25:32.109918Z\"},{\"id\":2,\"user_id\":1,\"name\":\"Another Repo\",\"url\":\"https://github.com/example/another-repo\",\"ai_enabled\":false,\"created_at\":\"2025-03-24T23:25:32.118832Z\",\"updated_at\":\"2025-03-24T23:25:32.118832Z\"}]\n"
+						}
+					]
+				},
+				{
+					"name": "Get Repo by ID",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{local}}/repositories/2",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"repositories",
+								"2"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Get Repo by ID",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{local}}/repositories/2",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"repositories",
+										"2"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 16:33:29 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "196"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": "",
+									"type": "text"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"id\": 2,\n    \"user_id\": 1,\n    \"name\": \"Another Repo\",\n    \"url\": \"https://github.com/example/another-repo\",\n    \"ai_enabled\": false,\n    \"created_at\": \"2025-03-24T23:25:32.118832Z\",\n    \"updated_at\": \"2025-03-24T23:25:32.118832Z\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Update Repo",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"user_id\": 1,\r\n    \"name\": \"Go API\",\r\n    \"url\": \"https://github.com/example/gogogo\",\r\n    \"ai_enabled\": true\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}/repositories/2",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"repositories",
+								"2"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Update Repo",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"user_id\": 1,\r\n    \"name\": \"Go API\",\r\n    \"url\": \"https://github.com/example/gogogo\",\r\n    \"ai_enabled\": true\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{local}}/repositories/2",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"repositories",
+										"2"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 16:36:24 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "183"
+								},
+								{
+									"key": "Content-Type",
+									"value": "text/plain; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "{\"id\":2,\"user_id\":1,\"name\":\"Go API\",\"url\":\"https://github.com/example/gogogo\",\"ai_enabled\":true,\"created_at\":\"2025-03-24T23:25:32.118832Z\",\"updated_at\":\"2025-03-24T23:25:32.118832Z\"}\n"
+						}
+					]
+				},
+				{
+					"name": "Delete Repo",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{local}}/repositories/10",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								"repositories",
+								"10"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Delete Repo",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{local}}/repositories/10",
+									"host": [
+										"{{local}}"
+									],
+									"path": [
+										"repositories",
+										"10"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Mon, 24 Mar 2025 16:47:35 GMT"
+								},
+								{
+									"key": "Content-Length",
+									"value": "49"
+								},
+								{
+									"key": "Content-Type",
+									"value": "text/plain; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "{\"message\":\"User dengan ID 10 berhasil dihapus\"}\n"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Liveness",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{local}}/",
+					"host": [
+						"{{local}}"
+					],
+					"path": [
+						""
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "Liveness",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{local}}/",
+							"host": [
+								"{{local}}"
+							],
+							"path": [
+								""
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "plain",
+					"header": [
+						{
+							"key": "Date",
+							"value": "Mon, 24 Mar 2025 08:07:26 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "17"
+						},
+						{
+							"key": "Content-Type",
+							"value": "text/plain; charset=utf-8"
+						}
+					],
+					"cookie": [],
+					"body": "API is running..."
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "local",
+			"value": "http://localhost:8080",
+			"type": "default"
+		}
+	]
+}

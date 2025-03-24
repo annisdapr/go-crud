@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: go_crud_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gocrud
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql  # Tambahkan ini
+    networks:
+      - go_crud_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gocrud"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:alpine
+    container_name: go_crud_redis
+    restart: always
+    ports:
+      - "6380:6379"
+    networks:
+      - go_crud_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: go_crud_app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # environment:
+    #   DATABASE_URL: "postgres://postgres:postgres@db:5432/gocrud?sslmode=disable"
+    #   REDIS_ADDR: "redis:6379"
+    #   REDIS_PASSWORD: ""
+    #   REDIS_DB: "0"
+    env_file:
+      - .env 
+    ports:
+      - "8080:8080"
+    networks:
+      - go_crud_network
+
+volumes:
+  postgres_data:
+
+networks:
+  go_crud_network:
+    driver: bridge
+
+

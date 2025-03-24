@@ -6,6 +6,7 @@ import (
 	"go-crud/internal/usecase"
 	"net/http"
 	"strconv"
+	"fmt"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -18,22 +19,51 @@ func NewRepositoryHandler(repoUC usecase.IRepositoryUsecase) *RepositoryHandler 
 	return &RepositoryHandler{RepoUC: repoUC}
 }
 
-// Create Repository (POST /repositories)
 func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Request) {
-	var repo entity.Repository
-	if err := json.NewDecoder(r.Body).Decode(&repo); err != nil {
+	userID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	// Decode request body ke slice of Repository
+	var repos []entity.Repository
+	if err := json.NewDecoder(r.Body).Decode(&repos); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.RepoUC.CreateRepository(r.Context(), &repo); err != nil {
-		http.Error(w, "Failed to create repository", http.StatusInternalServerError)
-		return
+	// Insert tiap repository ke database
+	for i := range repos {
+		repos[i].UserID = userID // Set user_id dari URL
+		err = h.RepoUC.CreateRepository(r.Context(), &repos[i])
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
+	// Beri respons sukses dengan daftar repository yang dibuat
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(repo)
+	json.NewEncoder(w).Encode(repos)
 }
+
+// Create Repository (POST /repositories)
+// func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Request) {
+// 	var repo entity.Repository
+// 	if err := json.NewDecoder(r.Body).Decode(&repo); err != nil {
+// 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	if err := h.RepoUC.CreateRepository(r.Context(), &repo); err != nil {
+// 		http.Error(w, "Failed to create repository", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	w.WriteHeader(http.StatusCreated)
+// 	json.NewEncoder(w).Encode(repo)
+// }
 
 // Get Repository by ID (GET /repositories/{id})
 func (h *RepositoryHandler) GetRepositoryByID(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +83,23 @@ func (h *RepositoryHandler) GetRepositoryByID(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(repo)
 }
 
+func (h *RepositoryHandler) GetRepositoriesByUserID(w http.ResponseWriter, r *http.Request) {
+	userID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	repos, err := h.RepoUC.GetRepositoriesByUserID(r.Context(), userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(repos)
+}
+
+
 func (h *RepositoryHandler) UpdateRepository(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
@@ -66,7 +113,6 @@ func (h *RepositoryHandler) UpdateRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// ✅ Perbaikan: Tambahkan r.Context() sebagai argumen pertama
 	updatedRepo, err := h.RepoUC.UpdateRepository(r.Context(), id, repo)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -93,5 +139,8 @@ func (h *RepositoryHandler) DeleteRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": fmt.Sprintf("User dengan ID %d berhasil dihapus", id),
+	})
 }

@@ -13,7 +13,8 @@ type UserRepository interface {
 	CreateUser(ctx context.Context, user *entity.User) error
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
 	UpdateUser(ctx context.Context, user *entity.User) error // Tambahkan UpdateUser
-	DeleteUser(ctx context.Context, id int) error           // Tambahkan DeleteUser
+	DeleteUser(ctx context.Context, id int) error    
+	GetAllUsers(ctx context.Context) ([]entity.User, error)        // Tambahkan DeleteUser
 }
 
 type userRepository struct {
@@ -60,3 +61,29 @@ func (r *userRepository) DeleteUser(ctx context.Context, id int) error {
 	_, err := r.db.Exec(ctx, query, id)
 	return err
 }
+
+// GetAllUsers mengambil semua user dari database
+func (r *userRepository) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	query := "SELECT id, name, email, created_at, updated_at FROM users"
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []entity.User
+	for rows.Next() {
+		var user entity.User
+		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.CreatedAt, &user.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
