@@ -23,6 +23,9 @@ RUN go build -o main cmd/main.go
 # Stage 2: Runtime
 FROM alpine:latest
 
+# Install dependencies yang diperlukan (misalnya untuk healthcheck)
+RUN apk add --no-cache curl
+
 # Buat folder kerja di dalam container
 WORKDIR /root/
 

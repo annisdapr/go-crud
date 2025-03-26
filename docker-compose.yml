@@ -13,7 +13,7 @@ services:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql  # Tambahkan ini
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql 
     networks:
       - go_crud_network
     healthcheck:
@@ -54,6 +54,11 @@ services:
       - "8080:8080"
     networks:
       - go_crud_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/liveness"]
+      interval: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:
