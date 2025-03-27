@@ -1,0 +1,18 @@
+# Ignore .env files
+.env
+
+# Ignore compiled executables
+/go-crud
+/go-crud.exe
+
+# Ignore logs and temp files
+*.log
+*.out
+/tmp
+/cache
+
+# Ignore IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
