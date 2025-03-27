@@ -7,17 +7,26 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"go-crud/config"
 	"go-crud/delivery"
-	deliveryHTTP "go-crud/delivery/http"
 	"go-crud/internal/repository"
 	"go-crud/internal/usecase"
+	"go-crud/internal/tracing"
 )
 
+
+var ongoingRequests int32
+var wg sync.WaitGroup
 func main() {
+	
+	shutdownTracer := tracing.InitTracer("go-crud")
+	defer shutdownTracer()
+
 	// Inisialisasi koneksi database
 	config.InitDB()
 	defer config.CloseDB()
@@ -29,20 +38,15 @@ func main() {
 	// Inisialisasi repository
 	userRepo := repository.NewUserRepository(config.DBPool)
 	repoRepo := repository.NewRepositoryRepository(config.DBPool)
+	codeReviewRepo := repository.NewCodeReviewRepository(config.DBPool)
 
 	// Inisialisasi usecase
-	userUC := usecase.NewUserUsecase(userRepo)
+	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient)
 	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo)
-
-	// Inisialisasi health handler
-	healthHandler := deliveryHTTP.NewHealthHandler(config.DBPool, config.RedisClient)
+	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
 
 	// Inisialisasi router dari package `delivery`
-	router := delivery.NewRouter(userUC, repoUC, config.DBPool, config.RedisClient)
-
-	// Tambahkan health check handler
-	router.Get("/health/liveness", healthHandler.LivenessCheck)
-	router.Get("/health/readiness", healthHandler.ReadinessCheck)
+	router := delivery.NewRouter(userUC, repoUC, codeReviewUC, config.DBPool, config.RedisClient)
 
 	// Jalankan server
 	port := "8080"
@@ -56,7 +60,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Jalankan server di goroutine agar tidak blocking
+	// Jalankan server di goroutine
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("❌ Gagal menjalankan server: %v", err)
@@ -65,13 +69,20 @@ func main() {
 
 	// Tunggu sinyal shutdown
 	<-stop
-	fmt.Println("🛑 Menutup server...")
+	fmt.Println("\n🛑 Menutup server...")
 
-	// Buat context timeout untuk graceful shutdown
+	// Jika masih ada proses berjalan, tunggu hingga selesai
+	if atomic.LoadInt32(&ongoingRequests) > 0 {
+		fmt.Printf("⚠️  Menunggu %d proses code review selesai...\n", atomic.LoadInt32(&ongoingRequests))
+	}
+
+	// Tunggu semua goroutine selesai
+	wg.Wait()
+
+	// Buat context timeout untuk shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Tutup server secara graceful
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("❌ Gagal menutup server: %v", err)
 	}

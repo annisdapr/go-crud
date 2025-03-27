@@ -11,8 +11,10 @@ import (
 type RepositoryRepository interface {
 	CreateRepository(ctx context.Context, repo *entity.Repository) error
 	GetRepositoryByID(ctx context.Context, id int) (*entity.Repository, error)
+	GetAllRepositories(ctx context.Context) ([]entity.Repository, error)
+
 	GetByID(ctx context.Context, id int) (*entity.Repository, error)
-	GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error) // ✅ Tambahkan ini
+	GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error) 
 	Update(ctx context.Context, repo *entity.Repository) error
 	Delete(ctx context.Context, id int) error
 }
@@ -41,8 +43,6 @@ func (r *repoRepository) GetRepositoriesByUserID(ctx context.Context, userID int
 
 	return repositories, nil
 }
-
-
 
 type repoRepository struct {
 	db  *pgxpool.Pool 
@@ -73,6 +73,27 @@ func (r *repoRepository) GetRepositoryByID(ctx context.Context, id int) (*entity
 		return nil, err
 	}
 	return &repo, nil
+}
+
+func (r *repoRepository) GetAllRepositories(ctx context.Context) ([]entity.Repository, error) {
+	query := "SELECT id, user_id, name, url, ai_enabled, created_at, updated_at FROM repositories"
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var repositories []entity.Repository
+	for rows.Next() {
+		var repo entity.Repository
+		err := rows.Scan(&repo.ID, &repo.UserID, &repo.Name, &repo.URL, &repo.AIEnabled, &repo.CreatedAt, &repo.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		repositories = append(repositories, repo)
+	}
+
+	return repositories, nil
 }
 
 func (r *repoRepository) GetByID(ctx context.Context, id int) (*entity.Repository, error) {

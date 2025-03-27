@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel"
 )
 
 type RepositoryHandler struct {
@@ -65,17 +66,38 @@ func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Requ
 // 	json.NewEncoder(w).Encode(repo)
 // }
 
+func (h *RepositoryHandler) GetAllRepositories(w http.ResponseWriter, r *http.Request) {
+	repos, err := h.RepoUC.GetAllRepositories(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to fetch repositories", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(repos)
+}
+
 // Get Repository by ID (GET /repositories/{id})
 func (h *RepositoryHandler) GetRepositoryByID(w http.ResponseWriter, r *http.Request) {
+	// Ambil context dari request
+	ctx := r.Context() // <- Tambahkan ini
+	
+	// Buat span baru
+	tracer := otel.Tracer("repository-handler")
+	ctx, span := tracer.Start(ctx, "GetRepositoryByID")
+	defer span.End()
+	
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
+		span.RecordError(err) // Catat error di tracing
 		http.Error(w, "Invalid repository ID", http.StatusBadRequest)
 		return
 	}
 
-	repo, err := h.RepoUC.GetRepositoryByID(r.Context(), id)
+	repo, err := h.RepoUC.GetRepositoryByID(ctx, id) // <- Gunakan `ctx` yang sudah dimodifikasi
 	if err != nil {
+		span.RecordError(err) // Catat error di tracing
 		http.Error(w, "Repository not found", http.StatusNotFound)
 		return
 	}
@@ -85,6 +107,7 @@ func (h *RepositoryHandler) GetRepositoryByID(w http.ResponseWriter, r *http.Req
 
 func (h *RepositoryHandler) GetRepositoriesByUserID(w http.ResponseWriter, r *http.Request) {
 	userID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return

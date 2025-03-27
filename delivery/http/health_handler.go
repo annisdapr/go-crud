@@ -7,12 +7,12 @@ import (
 	"sync/atomic"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9" // Gunakan library resmi Redis
+	"github.com/redis/go-redis/v9" 
 )
 
 type HealthHandler struct {
 	db    *pgxpool.Pool
-	redis *redis.Client // Tambahkan Redis
+	redis *redis.Client 
 	ready atomic.Bool
 }
 

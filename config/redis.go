@@ -46,7 +46,7 @@ func InitRedis() {
 	log.Println("✅ Redis berhasil terhubung di", redisAddr)
 }
 
-// CloseRedis untuk menutup koneksi Redis saat aplikasi berhenti
+
 func CloseRedis() {
 	if RedisClient != nil {
 		RedisClient.Close()

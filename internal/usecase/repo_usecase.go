@@ -5,12 +5,15 @@ import (
 	"errors"
 	"go-crud/internal/entity"
 	"go-crud/internal/repository"
+
+	"go.opentelemetry.io/otel"
 )
 
 // Interface untuk RepositoryUsecase
 type IRepositoryUsecase interface {
 	CreateRepository(ctx context.Context, repo *entity.Repository) error
 	GetRepositoryByID(ctx context.Context, id int) (*entity.Repository, error)
+	GetAllRepositories(ctx context.Context) ([]entity.Repository, error)
 	UpdateRepository(ctx context.Context, id int, input RepositoryInput) (entity.Repository, error)
 	DeleteRepository(ctx context.Context, id int) error
 	GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error)
@@ -34,7 +37,6 @@ func NewRepositoryUsecase(repoRepo repository.RepositoryRepository, userRepo rep
 	return &RepositoryUsecase{repoRepo: repoRepo, userRepo: userRepo}
 }
 
-// ✅ Perbaiki Implementasi Metode
 func (u *RepositoryUsecase) CreateRepository(ctx context.Context, repo *entity.Repository) error {
 	// Cek apakah user ada sebelum buat repo
 	_, err := u.userRepo.GetUserByID(ctx, repo.UserID)
@@ -45,14 +47,30 @@ func (u *RepositoryUsecase) CreateRepository(ctx context.Context, repo *entity.R
 	return u.repoRepo.CreateRepository(ctx, repo)
 }
 
+func (u *RepositoryUsecase) GetAllRepositories(ctx context.Context) ([]entity.Repository, error) {
+	return u.repoRepo.GetAllRepositories(ctx)
+}
+
+
 func (u *RepositoryUsecase) GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error) {
+	tracer := otel.Tracer("repository-usecase")
+	ctx, span := tracer.Start(ctx, "GetRepositoriesByUserID") // Perbaiki nama tracing
+	defer span.End()
+	
 	// Pastikan user ada sebelum mengambil repositorinya
 	_, err := u.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
+		span.RecordError(err) // Tambahkan error logging ke tracing
 		return nil, errors.New("user not found")
 	}
 
-	return u.repoRepo.GetRepositoriesByUserID(ctx, userID)
+	repos, err := u.repoRepo.GetRepositoriesByUserID(ctx, userID)
+	if err != nil {
+		span.RecordError(err) // Catat error di tracing
+		return nil, err
+	}
+
+	return repos, nil
 }
 
 
@@ -60,9 +78,9 @@ func (u *RepositoryUsecase) GetRepositoryByID(ctx context.Context, id int) (*ent
 	return u.repoRepo.GetRepositoryByID(ctx, id)
 }
 
-// ✅ Perbaikan Pemanggilan Repository
+
 func (u *RepositoryUsecase) UpdateRepository(ctx context.Context, id int, input RepositoryInput) (entity.Repository, error) {
-	repo, err := u.repoRepo.GetRepositoryByID(ctx, id) // ✅ Perbaiki pemanggilan method
+	repo, err := u.repoRepo.GetRepositoryByID(ctx, id) 
 	if err != nil {
 		return entity.Repository{}, err
 	}
@@ -71,7 +89,7 @@ func (u *RepositoryUsecase) UpdateRepository(ctx context.Context, id int, input 
 	repo.URL = input.URL
 	repo.AIEnabled = input.AIEnabled
 
-	err = u.repoRepo.Update(ctx, repo) // ✅ Perbaiki pemanggilan method
+	err = u.repoRepo.Update(ctx, repo) 
 	if err != nil {
 		return entity.Repository{}, err
 	}
@@ -79,5 +97,5 @@ func (u *RepositoryUsecase) UpdateRepository(ctx context.Context, id int, input 
 }
 
 func (u *RepositoryUsecase) DeleteRepository(ctx context.Context, id int) error {
-	return u.repoRepo.Delete(ctx, id) // ✅ Perbaiki pemanggilan method
+	return u.repoRepo.Delete(ctx, id) 
 }
