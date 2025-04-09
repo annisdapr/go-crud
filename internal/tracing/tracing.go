@@ -3,6 +3,8 @@ package tracing
 import (
 	"context"
 	"log"
+	"os"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -10,11 +12,19 @@ import (
 	"go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
-// InitTracer menginisialisasi Jaeger tracer
+var Tracer = otel.Tracer("go-crud")
+
+
 func InitTracer(serviceName string) func() {
-	// Ganti "localhost" dengan "jaeger" karena dalam Docker, service saling mengenali dengan nama service
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://jaeger:14268/api/traces")))
-	//endpoint jangan di hardcode pindah ke encv
+
+	jaegerEndpoint := os.Getenv("JAEGER_ENDPOINT")
+	if jaegerEndpoint == "" {
+		jaegerEndpoint = "http://jaeger:14268/api/traces" // fallback default
+	}
+
+	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(
+		jaeger.WithEndpoint(jaegerEndpoint),
+	))
 	if err != nil {
 		log.Fatal(err)
 	}

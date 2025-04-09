@@ -12,9 +12,9 @@ import (
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *entity.User) error
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
-	UpdateUser(ctx context.Context, user *entity.User) error // Tambahkan UpdateUser
+	UpdateUser(ctx context.Context, user *entity.User) error 
 	DeleteUser(ctx context.Context, id int) error    
-	GetAllUsers(ctx context.Context) ([]entity.User, error)        // Tambahkan DeleteUser
+	GetAllUsers(ctx context.Context) ([]entity.User, error)      
 }
 
 type userRepository struct {

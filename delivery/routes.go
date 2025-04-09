@@ -1,11 +1,13 @@
 package delivery
 
 import (
+	"context"
 	deliveryHTTP "go-crud/delivery/http"
 	"go-crud/internal/usecase"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"  
+	"github.com/redis/go-redis/v9"
 )
 func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, codeReviewUC usecase.ICodeReviewUsecase,dbPool *pgxpool.Pool, redisClient *redis.Client) *chi.Mux {
 	r := chi.NewRouter()
@@ -27,7 +29,7 @@ func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, c
 	r.Put("/repositories/{id}", repoHandler.UpdateRepository)
 	r.Delete("/repositories/{id}", repoHandler.DeleteRepository)
 
-	codeReviewHandler := deliveryHTTP.NewCodeReviewHandler(codeReviewUC)
+	codeReviewHandler := deliveryHTTP.NewCodeReviewHandler(context.Background(),codeReviewUC)
 	r.Post("/repositories/{id}/codereview", codeReviewHandler.StartCodeReview)
 	r.Get("/repositories/{id}/codereview/logs", codeReviewHandler.GetReviewLogs)
 

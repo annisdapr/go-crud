@@ -1,13 +1,14 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
+	"go-crud/internal/tracing"
 	"net/http"
 	"sync/atomic"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9" 
+	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type HealthHandler struct {
@@ -28,30 +29,44 @@ func NewHealthHandler(db *pgxpool.Pool, redisClient *redis.Client) *HealthHandle
 
 // LivenessCheck memastikan aplikasi masih berjalan
 func (h *HealthHandler) LivenessCheck(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	ctx, span := tracing.Tracer.Start(ctx, "LivenessCheck")
+	defer span.End()
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "alive"})
 }
 
-// ReadinessCheck memastikan aplikasi siap menerima trafik
+
 func (h *HealthHandler) ReadinessCheck(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
+	ctx, span := tracing.Tracer.Start(ctx, "ReadinessCheck")
+	defer span.End()
 
 	// Cek koneksi ke database
 	if err := h.db.Ping(ctx); err != nil {
+		span.RecordError(err)
+		span.SetAttributes(attribute.String("component", "database"), attribute.String("status", "unreachable"))
 		http.Error(w, "Service not ready: DB unreachable", http.StatusServiceUnavailable)
 		return
 	}
+	span.SetAttributes(attribute.String("db.status", "ok"))
 
 	// Cek koneksi ke Redis
 	if err := h.redis.Ping(ctx).Err(); err != nil {
+		span.RecordError(err)
+		span.SetAttributes(attribute.String("component", "redis"), attribute.String("status", "unreachable"))
 		http.Error(w, "Service not ready: Redis unreachable", http.StatusServiceUnavailable)
 		return
 	}
+	span.SetAttributes(attribute.String("redis.status", "ok"))
 
-	// Jika semua OK
+	span.SetAttributes(attribute.String("service.readiness", "ready"))
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 }
+
 
 // // SetReady menandakan bahwa aplikasi siap menerima trafik
 // func (h *HealthHandler) SetReady() {

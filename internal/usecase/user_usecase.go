@@ -4,6 +4,7 @@ import (
 	"context"
 	"go-crud/internal/entity"
 	"go-crud/internal/repository"
+	"go-crud/internal/tracing"
 	"time"
 	"fmt"
 	"github.com/redis/go-redis/v9"
@@ -42,11 +43,16 @@ func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Clien
 
 // GetAllUsers mengambil semua data user dari database
 func (uc *UserUsecase) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.GetAllUsers") 
+	defer span.End()
+
 	return uc.UserRepo.GetAllUsers(ctx)
 }
 
 // CreateUser menambahkan user baru ke database
 func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error {
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.CreateUser") // tambahin UserUsecase.CreateUser
+	defer span.End()
 	// Atur waktu CreatedAt dan UpdatedAt
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
@@ -57,6 +63,8 @@ func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error 
 
 // GetUserByID dengan Redis caching
 func (uc *UserUsecase) GetUserByID(ctx context.Context, id int) (*entity.User, error) {
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.GetUserById") 
+	defer span.End()
 	// Buat cache key berdasarkan ID user
 	cacheKey := fmt.Sprintf("user:%d", id)
 
@@ -84,6 +92,9 @@ func (uc *UserUsecase) GetUserByID(ctx context.Context, id int) (*entity.User, e
 
 // Hapus cache di Redis setelah update
 func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) (entity.User, error) {
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.UpdateUser") 
+	defer span.End()
+	
 	user, err := uc.UserRepo.GetUserByID(ctx, id)
 	if err != nil {
 		return entity.User{}, err
@@ -107,6 +118,9 @@ func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) 
 
 // Hapus cache di Redis setelah delete
 func (uc *UserUsecase) DeleteUser(ctx context.Context, id int) error {
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.DeleteUser") 
+	defer span.End()
+
 	err := uc.UserRepo.DeleteUser(ctx, id)
 	if err != nil {
 		return err

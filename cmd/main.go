@@ -12,43 +12,66 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	"go-crud/config"
 	"go-crud/delivery"
 	"go-crud/internal/repository"
-	"go-crud/internal/usecase"
 	"go-crud/internal/tracing"
+	"go-crud/internal/usecase"
 )
-
 
 var ongoingRequests int32
 var wg sync.WaitGroup
+
 func main() {
-	
+	// Load .env file (penting kalau jalan secara lokal di luar Docker)
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("⚠️  .env file not found, relying on system environment variables")
+	}
+
+	// Init tracer
 	shutdownTracer := tracing.InitTracer("go-crud")
 	defer shutdownTracer()
 
-	// Inisialisasi koneksi database
+	// Init PostgreSQL
 	config.InitDB()
 	defer config.CloseDB()
 
-	// Inisialisasi Redis
+	// Init Redis
 	config.InitRedis()
 	defer config.CloseRedis()
 
-	// Inisialisasi repository
+	// Ambil URI dan DB name dari env
+	mongoURI := os.Getenv("MONGO_URI")
+	mongoDBName := os.Getenv("MONGO_DB_NAME")
+
+	if mongoURI == "" || mongoDBName == "" {
+		log.Fatal("❌ MONGO_URI or MONGO_DB_NAME not set in environment variables")
+	}
+
+	// Init MongoDB
+	mongoDB, mongoCleanup, err := config.InitMongoDB(mongoURI, mongoDBName)
+	if err != nil {
+		log.Fatal("❌ Failed to connect to MongoDB:", err)
+	}
+	defer mongoCleanup()
+
+	// Inisialisasi repository dan usecase
+	_ = repository.NewAuditLogMongoRepository(mongoDB)
 	userRepo := repository.NewUserRepository(config.DBPool)
 	repoRepo := repository.NewRepositoryRepository(config.DBPool)
 	codeReviewRepo := repository.NewCodeReviewRepository(config.DBPool)
 
-	// Inisialisasi usecase
 	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient)
 	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo)
 	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
 
-	// Inisialisasi router dari package `delivery`
+	// Inisialisasi router
 	router := delivery.NewRouter(userUC, repoUC, codeReviewUC, config.DBPool, config.RedisClient)
 
-	// Jalankan server
+	// Jalankan server HTTP
 	port := "8080"
 	fmt.Println("🚀 Server berjalan di port", port)
 	server := &http.Server{
@@ -56,34 +79,32 @@ func main() {
 		Handler: router,
 	}
 
-	// Channel untuk menangani sinyal sistem
+	// Graceful shutdown setup
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Jalankan server di goroutine
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("❌ Gagal menjalankan server: %v", err)
 		}
 	}()
 
-	// Tunggu sinyal shutdown
 	<-stop
 	fmt.Println("\n🛑 Menutup server...")
 
-	// Jika masih ada proses berjalan, tunggu hingga selesai
-	if atomic.LoadInt32(&ongoingRequests) > 0 {
+	// Tunggu semua code review selesai
+	for atomic.LoadInt32(&ongoingRequests) > 0 {
 		fmt.Printf("⚠️  Menunggu %d proses code review selesai...\n", atomic.LoadInt32(&ongoingRequests))
+		time.Sleep(1 * time.Second)
 	}
 
-	// Tunggu semua goroutine selesai
 	wg.Wait()
+	fmt.Println("✅ Semua code review selesai, melanjutkan shutdown server...")
 
-	// Buat context timeout untuk shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(ctxShutdown); err != nil {
 		log.Fatalf("❌ Gagal menutup server: %v", err)
 	}
 

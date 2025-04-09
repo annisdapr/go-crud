@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"go-crud/internal/usecase"
 	"net/http"
@@ -9,12 +10,24 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// type CodeReviewHandler struct {
+// 	CodeReviewUC usecase.ICodeReviewUsecase
+// }
+
+// func NewCodeReviewHandler(uc usecase.ICodeReviewUsecase) *CodeReviewHandler {
+// 	return &CodeReviewHandler{CodeReviewUC: uc}
+// }
+
 type CodeReviewHandler struct {
 	CodeReviewUC usecase.ICodeReviewUsecase
+	Ctx          context.Context // Tambahkan context global
 }
 
-func NewCodeReviewHandler(uc usecase.ICodeReviewUsecase) *CodeReviewHandler {
-	return &CodeReviewHandler{CodeReviewUC: uc}
+func NewCodeReviewHandler(ctx context.Context, uc usecase.ICodeReviewUsecase) *CodeReviewHandler {
+	return &CodeReviewHandler{
+		CodeReviewUC: uc,
+		Ctx:          ctx, // Simpan context global
+	}
 }
 
 // Mulai code review (long-running task)
@@ -27,7 +40,7 @@ func (h *CodeReviewHandler) StartCodeReview(w http.ResponseWriter, r *http.Reque
 
 	// Tambahkan tracking ke goroutine
 	go func() {
-		_ = h.CodeReviewUC.RunCodeReview(r.Context(), repoID)
+		_ = h.CodeReviewUC.RunCodeReview(h.Ctx, repoID) // Gunakan context dari main.go
 	}()
 
 	w.WriteHeader(http.StatusAccepted)

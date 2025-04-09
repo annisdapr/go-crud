@@ -21,7 +21,7 @@ type ICodeReviewUsecase interface {
 
 type codeReviewUsecase struct {
 	repo repository.CodeReviewRepository
-	wg   *sync.WaitGroup // Tambahkan WaitGroup
+	wg   *sync.WaitGroup 
 }
 
 // Modifikasi constructor untuk menerima WaitGroup
@@ -32,23 +32,33 @@ func NewCodeReviewUsecase(repo repository.CodeReviewRepository, wg *sync.WaitGro
 	}
 }
 
-// Simulasi Code Review (long-running task)
 func (uc *codeReviewUsecase) RunCodeReview(ctx context.Context, repoID int) error {
-	// Increment counter proses berjalan
 	atomic.AddInt32(&ongoingRequests, 1)
-	uc.wg.Add(1) // Pakai `uc.wg`, bukan `wg`
+	uc.wg.Add(1) 
 
 	defer func() {
-		atomic.AddInt32(&ongoingRequests, -1) // Decrement setelah selesai
-		uc.wg.Done()                          // Pakai `uc.wg`, bukan `wg`
+		atomic.AddInt32(&ongoingRequests, -1)
+		uc.wg.Done()
 	}()
 
 	log.Println("🚀 Memulai code review untuk repo:", repoID)
 
-	// Simulasi proses review (delay 10 detik)
-	time.Sleep(10 * time.Second)
+	// Simulasi kerja selama 10 detik
+	for i := 0; i < 10; i++ {
+		select {
+		case <-ctx.Done(): // Jika context dibatalkan, beri kesempatan untuk menyelesaikan
+			log.Println("⏳ Code review sedang dalam proses, menunggu hingga aman untuk keluar...")
 
-	// Hasil review (dummy result)
+			// Tunggu sebentar untuk menyelesaikan tugas dengan aman
+			time.Sleep(2 * time.Second)
+			log.Println("⏹️ Code review dihentikan untuk repo:", repoID)
+			return ctx.Err()
+		default:
+			time.Sleep(1 * time.Second) // Simulasi kerja per detik
+		}
+	}
+
+	// Simpan hasil review
 	reviewLog := entity.CodeReviewLog{
 		RepositoryID: repoID,
 		ReviewResult: "Code review completed: No critical issues found",
@@ -62,6 +72,45 @@ func (uc *codeReviewUsecase) RunCodeReview(ctx context.Context, repoID int) erro
 	log.Println("✅ Code review selesai untuk repo:", repoID)
 	return nil
 }
+
+// // Simulasi Code Review (long-running task)
+// func (uc *codeReviewUsecase) RunCodeReview(ctx context.Context, repoID int) error {
+// 	atomic.AddInt32(&ongoingRequests, 1)
+// 	uc.wg.Add(1) 
+
+// 	defer func() {
+// 		atomic.AddInt32(&ongoingRequests, -1)
+// 		uc.wg.Done()
+// 	}()
+
+// 	log.Println("🚀 Memulai code review untuk repo:", repoID)
+
+// 	// Loop untuk bisa menangkap sinyal shutdown saat sleep
+// 	for i := 0; i < 10; i++ {
+// 		select {
+// 		case <-ctx.Done(): // Jika context dibatalkan, hentikan proses
+// 			log.Println("⏹️ Code review dibatalkan untuk repo:", repoID)
+// 			return ctx.Err()
+// 		default:
+// 			time.Sleep(1 * time.Second) // Tunggu per detik untuk bisa dicek
+// 		}
+// 	}
+
+// 	// Hasil review (dummy result)
+// 	reviewLog := entity.CodeReviewLog{
+// 		RepositoryID: repoID,
+// 		ReviewResult: "Code review completed: No critical issues found",
+// 	}
+
+// 	err := uc.repo.InsertCodeReviewLog(ctx, &reviewLog)
+// 	if err != nil {
+// 		return fmt.Errorf("❌ Gagal menyimpan hasil code review: %w", err)
+// 	}
+
+// 	log.Println("✅ Code review selesai untuk repo:", repoID)
+// 	return nil
+// }
+
 
 func (uc *codeReviewUsecase) GetReviewLogs(ctx context.Context, repoID int) ([]entity.CodeReviewLog, error) {
 	return uc.repo.GetCodeReviewLogsByRepoID(ctx, repoID)
