@@ -54,7 +54,6 @@ func (u *RepositoryUsecase) GetAllRepositories(ctx context.Context) ([]entity.Re
 	return u.repoRepo.GetAllRepositories(ctx)
 }
 
-
 func (u *RepositoryUsecase) GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error) {
 	ctx, span := tracing.Tracer.Start(ctx, "GetRepositoriesByUserID") 
 	defer span.End()
@@ -62,7 +61,7 @@ func (u *RepositoryUsecase) GetRepositoriesByUserID(ctx context.Context, userID 
 	// Pastikan user ada sebelum mengambil repositorinya
 	_, err := u.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
-		span.RecordError(err) // Tambahkan error logging ke tracing
+		span.RecordError(err) 
 		return nil, errors.New("user not found")
 	}
 

@@ -5,6 +5,7 @@ import (
 	"go-crud/internal/entity"
 	"go-crud/internal/tracing"
 	"go-crud/internal/usecase"
+	"go-crud/internal/validator"
 	"net/http"
 	"strconv"
 
@@ -16,29 +17,16 @@ import (
 
 type UserHandler struct {
 	UserUC usecase.IUserUsecase
+	Validator *validator.CustomValidator
 }
 
-func NewUserHandler(userUC usecase.IUserUsecase) *UserHandler {
-	return &UserHandler{UserUC: userUC}
+func NewUserHandler(userUC usecase.IUserUsecase, validator *validator.CustomValidator) *UserHandler {
+	return &UserHandler{
+		UserUC: userUC,
+		Validator: validator,
+	}
 }
 
-// func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-// 	var user entity.User
-// 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-// 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-// 		return
-// 	}
-
-	
-// 	if err := h.UserUC.CreateUser(r.Context(), &user); err != nil {
-// 		log.Printf("Error creating user: %v", err) 
-// 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	w.WriteHeader(http.StatusCreated)
-// 	json.NewEncoder(w).Encode(user)
-// }
 // Create User (POST /users)
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -50,6 +38,12 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		span.RecordError(err)
 		span.SetAttributes(attribute.String("error.reason", "invalid JSON payload"))
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.Validator.Validate(&user); err != nil {
+		span.RecordError(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -148,6 +142,12 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	
+	if err := h.Validator.Validate(&user); err != nil {
+		span.RecordError(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// Tambahkan atribut informasi dari payload
 	span.SetAttributes(
@@ -199,4 +199,21 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+// 	var user entity.User
+// 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+// 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+// 		return
+// 	}
+
+	
+// 	if err := h.UserUC.CreateUser(r.Context(), &user); err != nil {
+// 		log.Printf("Error creating user: %v", err) 
+// 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	w.WriteHeader(http.StatusCreated)
+// 	json.NewEncoder(w).Encode(user)
+// }
 

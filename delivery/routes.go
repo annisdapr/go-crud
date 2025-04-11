@@ -4,6 +4,7 @@ import (
 	"context"
 	deliveryHTTP "go-crud/delivery/http"
 	"go-crud/internal/usecase"
+	"go-crud/internal/validator"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,9 +12,12 @@ import (
 )
 func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, codeReviewUC usecase.ICodeReviewUsecase,dbPool *pgxpool.Pool, redisClient *redis.Client) *chi.Mux {
 	r := chi.NewRouter()
+// ✅ Inisialisasi validator
+	validator := validator.NewValidator()
 
-	// User handler
-	userHandler := deliveryHTTP.NewUserHandler(userUC)
+	// ✅ User handler (dengan validator)
+	userHandler := deliveryHTTP.NewUserHandler(userUC, validator)
+
 	r.Post("/users", userHandler.CreateUser)
 	r.Get("/users", userHandler.GetAllUsers)
 	r.Get("/users/{id}", userHandler.GetUserByID)
@@ -21,7 +25,7 @@ func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, c
 	r.Delete("/users/{id}", userHandler.DeleteUser)
 
 	// Repository handler
-	repoHandler := deliveryHTTP.NewRepositoryHandler(repoUC)
+	repoHandler := deliveryHTTP.NewRepositoryHandler(repoUC, validator)
 	r.Post("/users/{id}/repositories", repoHandler.CreateRepository)
 	r.Get("/users/{id}/repositories", repoHandler.GetRepositoriesByUserID)
 	r.Get("/repositories/{id}", repoHandler.GetRepositoryByID)

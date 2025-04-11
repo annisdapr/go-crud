@@ -6,6 +6,7 @@ import (
 	"go-crud/internal/entity"
 	"go-crud/internal/tracing"
 	"go-crud/internal/usecase"
+	"go-crud/internal/validator"
 	"net/http"
 	"strconv"
 
@@ -16,10 +17,14 @@ import (
 
 type RepositoryHandler struct {
 	RepoUC usecase.IRepositoryUsecase
+	Validator *validator.CustomValidator
 }
 
-func NewRepositoryHandler(repoUC usecase.IRepositoryUsecase) *RepositoryHandler {
-	return &RepositoryHandler{RepoUC: repoUC}
+func NewRepositoryHandler(repoUC usecase.IRepositoryUsecase, v *validator.CustomValidator) *RepositoryHandler {
+	return &RepositoryHandler{
+		RepoUC: repoUC,
+		Validator: v,
+	}
 }
 
 func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Request) {
@@ -47,6 +52,13 @@ func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Requ
 	// Insert tiap repository ke database
 	for i := range repos {
 		repos[i].UserID = userID
+
+		if err := h.Validator.Validate(&repos[i]); err != nil {
+			span.RecordError(err)
+			http.Error(w, fmt.Sprintf("Validation failed at index %d: %s", i, err.Error()), http.StatusBadRequest)
+			return
+		}
+		
 		err = h.RepoUC.CreateRepository(ctx, &repos[i])
 		if err != nil {
 			span.RecordError(err)
@@ -62,8 +74,6 @@ func (h *RepositoryHandler) CreateRepository(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(repos)
 }
-
-
 
 func (h *RepositoryHandler) GetAllRepositories(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -133,8 +143,6 @@ func (h *RepositoryHandler) GetRepositoriesByUserID(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(repos)
 }
 
-
-
 func (h *RepositoryHandler) UpdateRepository(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx, span := tracing.Tracer.Start(ctx, "UpdateRepository")
@@ -146,12 +154,19 @@ func (h *RepositoryHandler) UpdateRepository(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
+
 	span.SetAttributes(attribute.Int("repository.id", id))
 
 	var repo usecase.RepositoryInput
 	if err := json.NewDecoder(r.Body).Decode(&repo); err != nil {
 		span.RecordError(err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	
+	if err := h.Validator.Validate(&repo); err != nil {
+		span.RecordError(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -170,8 +185,6 @@ func (h *RepositoryHandler) UpdateRepository(w http.ResponseWriter, r *http.Requ
 
 	json.NewEncoder(w).Encode(updatedRepo)
 }
-
-
 
 func (h *RepositoryHandler) DeleteRepository(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
