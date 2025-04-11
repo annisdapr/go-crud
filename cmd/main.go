@@ -16,6 +16,7 @@ import (
 
 	"go-crud/config"
 	"go-crud/delivery"
+	"go-crud/internal/kafka"
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
 	"go-crud/internal/usecase"
@@ -43,6 +44,8 @@ func main() {
 	config.InitRedis()
 	defer config.CloseRedis()
 
+	kafkaProducer, _ := kafka.NewKafkaProducer("localhost:9092", "user-events")
+
 	// Ambil URI dan DB name dari env
 	mongoURI := os.Getenv("MONGO_URI")
 	mongoDBName := os.Getenv("MONGO_DB_NAME")
@@ -64,7 +67,7 @@ func main() {
 	repoRepo := repository.NewRepositoryRepository(config.DBPool)
 	codeReviewRepo := repository.NewCodeReviewRepository(config.DBPool)
 
-	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient)
+	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient, kafkaProducer)
 	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo)
 	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
 

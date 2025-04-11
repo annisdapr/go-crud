@@ -2,13 +2,15 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"go-crud/internal/entity"
+	"go-crud/internal/kafka"
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
 	"time"
-	"fmt"
+
 	"github.com/redis/go-redis/v9"
-	"encoding/json" 
 )
 
 
@@ -24,6 +26,7 @@ type IUserUsecase interface {
 type UserUsecase struct {
     UserRepo repository.UserRepository
 	redisClient *redis.Client
+	kafkaProducer *kafka.KafkaProducer 
 }
 
 // Struct untuk input user (perbaikan undefined: UserInput)
@@ -33,10 +36,11 @@ type UserInput struct {
 }
 
 // NewUserUsecase membuat instance UserUsecase
-func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client) IUserUsecase {
-    return &UserUsecase{
-		UserRepo: userRepo,
-		redisClient: redisClient,
+func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client, kafkaProducer *kafka.KafkaProducer) IUserUsecase {
+	return &UserUsecase{
+		UserRepo:      userRepo,
+		redisClient:   redisClient,
+		kafkaProducer: kafkaProducer,
 	}
 }
 
@@ -90,11 +94,10 @@ func (uc *UserUsecase) GetUserByID(ctx context.Context, id int) (*entity.User, e
 	return user, nil
 }
 
-// Hapus cache di Redis setelah update
 func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) (entity.User, error) {
-	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.UpdateUser") 
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.UpdateUser")
 	defer span.End()
-	
+
 	user, err := uc.UserRepo.GetUserByID(ctx, id)
 	if err != nil {
 		return entity.User{}, err
@@ -109,12 +112,49 @@ func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) 
 		return entity.User{}, err
 	}
 
-	// Hapus cache di Redis setelah update
 	cacheKey := fmt.Sprintf("user:%d", id)
 	uc.redisClient.Del(ctx, cacheKey)
 
+	// 👇 Publish Kafka event
+	event := map[string]interface{}{
+		"event": "user.updated",
+		"id":    user.ID,
+		"name":  user.Name,
+		"email": user.Email,
+		"time":  user.UpdatedAt.Format(time.RFC3339),
+	}
+
+	eventBytes, _ := json.Marshal(event)
+	go uc.kafkaProducer.Publish(string(eventBytes))
+
 	return *user, nil
 }
+
+// // Hapus cache di Redis setelah update
+// func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) (entity.User, error) {
+// 	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.UpdateUser") 
+// 	defer span.End()
+	
+// 	user, err := uc.UserRepo.GetUserByID(ctx, id)
+// 	if err != nil {
+// 		return entity.User{}, err
+// 	}
+
+// 	user.Name = input.Name
+// 	user.Email = input.Email
+// 	user.UpdatedAt = time.Now()
+
+// 	err = uc.UserRepo.UpdateUser(ctx, user)
+// 	if err != nil {
+// 		return entity.User{}, err
+// 	}
+
+// 	// Hapus cache di Redis setelah update
+// 	cacheKey := fmt.Sprintf("user:%d", id)
+// 	uc.redisClient.Del(ctx, cacheKey)
+
+// 	return *user, nil
+// }
 
 // Hapus cache di Redis setelah delete
 func (uc *UserUsecase) DeleteUser(ctx context.Context, id int) error {
