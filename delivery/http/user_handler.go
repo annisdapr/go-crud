@@ -47,7 +47,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Tambahkan atribut dari payload ke tracing
 	span.SetAttributes(
 		attribute.String("user.name", user.Name),
 		attribute.String("user.email", user.Email),
@@ -55,14 +54,14 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.UserUC.CreateUser(ctx, &user); err != nil {
 		span.RecordError(err)
-		span.SetAttributes(attribute.String("error.reason", "failed to create user in usecase"))
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		http.Error(w, "Failed to send create event", http.StatusInternalServerError)
 		return
 	}
 
-	span.AddEvent("User successfully created")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Create user event sent to Kafka",
+	})
 }
 
 
@@ -131,39 +130,39 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		span.RecordError(err)
-		span.SetAttributes(attribute.String("user.id_param", idStr))
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 
-	var user usecase.UserInput
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	var input usecase.UserInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		span.RecordError(err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-	
-	if err := h.Validator.Validate(&user); err != nil {
+
+	if err := h.Validator.Validate(&input); err != nil {
 		span.RecordError(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Tambahkan atribut informasi dari payload
 	span.SetAttributes(
 		attribute.Int("user.id", id),
-		attribute.String("user.name", user.Name),   // Ganti dengan field yang tersedia
-		attribute.String("user.email", user.Email), // Ganti dengan field yang tersedia
+		attribute.String("user.name", input.Name),
+		attribute.String("user.email", input.Email),
 	)
 
-	updatedUser, err := h.UserUC.UpdateUser(ctx, id, user)
-	if err != nil {
+	if _, err := h.UserUC.UpdateUser(ctx, id, input); err != nil {
 		span.RecordError(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to send update event", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(updatedUser)
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Update user event sent to Kafka",
+	})
 }
 
 
@@ -177,43 +176,18 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		span.RecordError(err)
-		span.SetAttributes(attribute.String("user.id_param", idStr))
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 
-	span.SetAttributes(attribute.Int("user.id", id))
-
-	err = h.UserUC.DeleteUser(ctx, id)
-	if err != nil {
+	if err := h.UserUC.DeleteUser(ctx, id); err != nil {
 		span.RecordError(err)
-		http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+		http.Error(w, "Failed to send delete event", http.StatusInternalServerError)
 		return
 	}
 
-	span.SetAttributes(attribute.String("delete.status", "success"))
-
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": fmt.Sprintf("User dengan ID %d berhasil dihapus", id),
+		"message": fmt.Sprintf("Delete user event for ID %d sent to Kafka", id),
 	})
 }
-
-// func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-// 	var user entity.User
-// 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-// 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-// 		return
-// 	}
-
-	
-// 	if err := h.UserUC.CreateUser(r.Context(), &user); err != nil {
-// 		log.Printf("Error creating user: %v", err) 
-// 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	w.WriteHeader(http.StatusCreated)
-// 	json.NewEncoder(w).Encode(user)
-// }
-

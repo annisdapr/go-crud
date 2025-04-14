@@ -44,7 +44,7 @@ func main() {
 	config.InitRedis()
 	defer config.CloseRedis()
 
-	kafkaProducer, _ := kafka.NewKafkaProducer("localhost:9092", "user-events")
+	kafkaProducer, _ := kafka.NewKafkaProducer("kafka:9092", "user-events")
 
 	// Ambil URI dan DB name dari env
 	mongoURI := os.Getenv("MONGO_URI")
@@ -68,8 +68,25 @@ func main() {
 	codeReviewRepo := repository.NewCodeReviewRepository(config.DBPool)
 
 	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient, kafkaProducer)
-	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo)
+	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo, kafkaProducer, config.RedisClient)
 	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
+
+	// Init Kafka Consumer (user + repository events)
+	kafkaConsumer, err := kafka.NewKafkaConsumer("kafka:9092", "crud-group", "user-events", userRepo, repoRepo)
+	if err != nil {
+		log.Fatalf("❌ Failed to start Kafka consumer: %v", err)
+	}
+
+	// Context untuk shutdown consumer
+	ctxConsumer, cancelConsumer := context.WithCancel(context.Background())
+	defer cancelConsumer()
+
+	// Jalankan Kafka consumer di background
+	go func() {
+		kafkaConsumer.Start(ctxConsumer)
+	}()
+
+
 
 	// Inisialisasi router
 	router := delivery.NewRouter(userUC, repoUC, codeReviewUC, config.DBPool, config.RedisClient)
@@ -94,6 +111,9 @@ func main() {
 
 	<-stop
 	fmt.Println("\n🛑 Menutup server...")
+
+	cancelConsumer()
+	fmt.Println("🛑 Kafka consumer dihentikan")
 
 	// Tunggu semua code review selesai
 	for atomic.LoadInt32(&ongoingRequests) > 0 {

@@ -41,38 +41,33 @@
 # Stage 1: Build
 FROM golang:1.23.5 AS builder
 
-# Enable CGO dan set target Linux AMD64
 ENV GO111MODULE=on \
     CGO_ENABLED=1 \
     GOOS=linux \
     GOARCH=amd64
 
-# Install librdkafka-dev untuk Kafka bindings
-RUN apt-get update && apt-get install -y librdkafka-dev
+# Install build tools dan librdkafka-dev
+RUN apt-get update && apt-get install -y build-essential librdkafka-dev
 
 WORKDIR /app
-
-# Copy module files dan download dependency
 COPY go.mod go.sum ./
 RUN go mod tidy
 
-# Copy semua source code ke image
 COPY . .
-
-# Compile aplikasi
 RUN go build -o main cmd/main.go
 
 # Stage 2: Runtime
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
-# Install librdkafka runtime dan curl
+# Install librdkafka runtime
 RUN apt-get update && apt-get install -y librdkafka1 curl && apt-get clean
 
 WORKDIR /root/
 COPY --from=builder /app/main .
 
-# Expose port aplikasi
 EXPOSE 8080
 
-# Jalankan aplikasi
 CMD ["./main"]
+
+
+
