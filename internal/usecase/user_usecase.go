@@ -80,7 +80,7 @@ func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error 
 	// Siapkan event payload
 	event := map[string]interface{}{
 		"event":      "user.created",
-		"id":         user.ID, // kamu bisa generate ID di sini kalau mau
+		"id":         user.ID, 
 		"name":       user.Name,
 		"email":      user.Email,
 		"time":       now.Format(time.RFC3339),
