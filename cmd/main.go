@@ -55,7 +55,8 @@ func main() {
 	}
 
 	// Init MongoDB
-	mongoDB, mongoCleanup, err := config.InitMongoDB(mongoURI, mongoDBName)
+	mongoClient, mongoDB, mongoCleanup, err := config.InitMongoDB(mongoURI, mongoDBName)
+
 	if err != nil {
 		log.Fatal("❌ Failed to connect to MongoDB:", err)
 	}
@@ -66,8 +67,9 @@ func main() {
 	userRepo := repository.NewUserRepository(config.DBPool)
 	repoRepo := repository.NewRepositoryRepository(config.DBPool)
 	codeReviewRepo := repository.NewCodeReviewRepository(config.DBPool)
+	auditRepo := repository.NewAuditLogMongoRepository(mongoDB)
 
-	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient, kafkaProducer)
+	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient, kafkaProducer, auditRepo)
 	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo, kafkaProducer, config.RedisClient)
 	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
 
@@ -89,7 +91,7 @@ func main() {
 
 
 	// Inisialisasi router
-	router := delivery.NewRouter(userUC, repoUC, codeReviewUC, config.DBPool, config.RedisClient)
+	router := delivery.NewRouter(userUC, repoUC, codeReviewUC, config.DBPool, config.RedisClient, mongoClient)
 
 	// Jalankan server HTTP
 	port := "8080"

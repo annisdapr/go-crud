@@ -5,18 +5,24 @@ import (
 	deliveryHTTP "go-crud/delivery/http"
 	"go-crud/internal/usecase"
 	"go-crud/internal/validator"
+	"go-crud/internal/repository"
+	"go.mongodb.org/mongo-driver/mongo"
+
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
-func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, codeReviewUC usecase.ICodeReviewUsecase,dbPool *pgxpool.Pool, redisClient *redis.Client) *chi.Mux {
+
+func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, codeReviewUC usecase.ICodeReviewUsecase,dbPool *pgxpool.Pool, redisClient *redis.Client, mongoClient *mongo.Client) *chi.Mux {
 	r := chi.NewRouter()
 // ✅ Inisialisasi validator
 	validator := validator.NewValidator()
 
-	// ✅ User handler (dengan validator)
-	userHandler := deliveryHTTP.NewUserHandler(userUC, validator)
+	auditRepo := repository.NewAuditLogMongoRepository(mongoClient.Database("audit_log_db"))
+
+	// ✅ Inject ke handler
+	userHandler := deliveryHTTP.NewUserHandler(userUC, validator, auditRepo)
 
 	r.Post("/users", userHandler.CreateUser)
 	r.Get("/users", userHandler.GetAllUsers)
@@ -41,6 +47,9 @@ func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, c
 	healthHandler := deliveryHTTP.NewHealthHandler(dbPool, redisClient)
 	r.Get("/health/liveness", healthHandler.LivenessCheck)
 	r.Get("/health/readiness", healthHandler.ReadinessCheck)
+
+	r.Get("/users/{id}/audit-logs", userHandler.GetUserAuditLogs)
+
 
 	return r
 }

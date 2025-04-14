@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-crud/internal/entity"
 	"go-crud/internal/kafka"
@@ -22,11 +24,13 @@ type IUserUsecase interface {
     UpdateUser(ctx context.Context, id int, input UserInput) (entity.User, error)
     DeleteUser(ctx context.Context, id int) error
 	GetAllUsers(ctx context.Context) ([]entity.User, error) 
+	IsEmailExists(ctx context.Context, email string) (bool, error)
 }
 
 // UserUsecase mengelola logika bisnis untuk User
 type UserUsecase struct {
     UserRepo repository.UserRepository
+	auditRepo    repository.AuditLogMongoRepository
 	redisClient *redis.Client
 	kafkaProducer *kafka.KafkaProducer 
 	cbRedis        *gobreaker.CircuitBreaker
@@ -41,7 +45,7 @@ type UserInput struct {
 }
 
 // NewUserUsecase membuat instance UserUsecase
-func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client, kafkaProducer *kafka.KafkaProducer) IUserUsecase {
+func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client, kafkaProducer *kafka.KafkaProducer, auditRepo repository.AuditLogMongoRepository) IUserUsecase {
 	cbRedis := gobreaker.NewCircuitBreaker(gobreaker.Settings{
 		Name:    "RedisBreaker",
 		Timeout: 5 * time.Second,
@@ -53,6 +57,7 @@ func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Clien
 	})
 	return &UserUsecase{
 		UserRepo:      userRepo,
+		auditRepo: auditRepo,
 		redisClient:   redisClient,
 		kafkaProducer: kafkaProducer,
 		cbRedis:       cbRedis,
@@ -60,13 +65,18 @@ func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Clien
 	}
 }
 
-
-// GetAllUsers mengambil semua data user dari database
-func (uc *UserUsecase) GetAllUsers(ctx context.Context) ([]entity.User, error) {
-	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.GetAllUsers") 
+func (uc *UserUsecase) IsEmailExists(ctx context.Context, email string) (bool, error) {
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.IsEmailExists")
 	defer span.End()
 
-	return uc.UserRepo.GetAllUsers(ctx)
+	_, err := uc.UserRepo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil // email tidak ditemukan
+		}
+		return false, err // error lain
+	}
+	return true, nil // email ditemukan
 }
 
 // CreateUser mengirim event ke Kafka untuk dibuat oleh consumer
@@ -88,12 +98,23 @@ func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error 
 
 	// Publish ke Kafka
 	go uc.kafkaProducer.Publish(event, "user.created")
+	_ = uc.auditRepo.InsertLog(ctx, &entity.AuditLog{
+		UserID:   user.ID,
+		UserName: user.Name,
+		Action:   "User created",
+	})	
 
 	// Tidak langsung insert ke database
 	return nil
 }
 
+// GetAllUsers mengambil semua data user dari database
+func (uc *UserUsecase) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.GetAllUsers") 
+	defer span.End()
 
+	return uc.UserRepo.GetAllUsers(ctx)
+}
 
 // GetUserByID dengan Redis caching
 func (uc *UserUsecase) GetUserByID(ctx context.Context, id int) (*entity.User, error) {
@@ -133,7 +154,6 @@ func (uc *UserUsecase) GetUserByID(ctx context.Context, id int) (*entity.User, e
 	return user, nil
 }
 
-
 func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) (entity.User, error) {
 	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.UpdateUser")
 	defer span.End()
@@ -163,11 +183,19 @@ func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) 
 		"email": user.Email,
 		"time":  user.UpdatedAt.Format(time.RFC3339),
 	}
-
 	go uc.kafkaProducer.Publish(event, "user.updated")
+
+	// 👇 Simpan audit log ke MongoDB
+	go uc.auditRepo.InsertLog(ctx, &entity.AuditLog{
+		UserID:   user.ID,
+		UserName: user.Name,
+		Action:   "User updated",
+	})
 
 	return *user, nil
 }
+
+
 // Hapus cache di Redis setelah delete
 // DeleteUser mengirim event user.deleted ke Kafka
 func (uc *UserUsecase) DeleteUser(ctx context.Context, id int) error {

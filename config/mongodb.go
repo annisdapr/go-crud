@@ -9,20 +9,20 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func InitMongoDB(uri string, dbName string) (*mongo.Database, func(), error) {
+func InitMongoDB(uri string, dbName string) (*mongo.Client, *mongo.Database, func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	clientOpts := options.Client().ApplyURI(uri)
 
 	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		cancel()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Test koneksi
 	if err := client.Ping(ctx, nil); err != nil {
 		cancel()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	log.Println("Connected to MongoDB")
@@ -36,5 +36,5 @@ func InitMongoDB(uri string, dbName string) (*mongo.Database, func(), error) {
 		cancel()
 	}
 
-	return client.Database(dbName), cleanup, nil
+	return client, client.Database(dbName), cleanup, nil
 }

@@ -17,7 +17,8 @@ type UserRepository interface {
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
 	UpdateUser(ctx context.Context, user *entity.User) error 
 	DeleteUser(ctx context.Context, id int) error    
-	GetAllUsers(ctx context.Context) ([]entity.User, error)      
+	GetAllUsers(ctx context.Context) ([]entity.User, error)     
+	GetByEmail(ctx context.Context, email string) (*entity.User, error) 
 }
 
 type userRepository struct {
@@ -185,5 +186,34 @@ func (r *userRepository) GetAllUsers(ctx context.Context) ([]entity.User, error)
 
 	return users, nil
 }
+
+func (r *userRepository) GetByEmail(ctx context.Context, email string) (*entity.User, error) {
+	ctx, span := tracing.Tracer.Start(ctx, "userRepository.GetByEmail")
+	defer span.End()
+
+	query := `SELECT id, name, email, created_at, updated_at FROM users WHERE email = $1`
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.statement", query),
+		attribute.String("db.user.email", email),
+	)
+
+	row := r.db.QueryRow(ctx, query, email)
+
+	var user entity.User
+	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		span.RecordError(err)
+		if err == sql.ErrNoRows {
+			return nil, err
+		}
+		return nil, err
+	}
+
+	span.SetAttributes(attribute.Int("db.user.id.result", user.ID))
+	return &user, nil
+}
+
 
 

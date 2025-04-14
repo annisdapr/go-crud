@@ -6,6 +6,7 @@ import (
 	"go-crud/internal/tracing"
 	"go-crud/internal/usecase"
 	"go-crud/internal/validator"
+	"go-crud/internal/repository"
 	"net/http"
 	"strconv"
 
@@ -18,14 +19,17 @@ import (
 type UserHandler struct {
 	UserUC usecase.IUserUsecase
 	Validator *validator.CustomValidator
+	AuditRepo   repository.AuditLogMongoRepository
 }
 
-func NewUserHandler(userUC usecase.IUserUsecase, validator *validator.CustomValidator) *UserHandler {
+func NewUserHandler(userUC usecase.IUserUsecase, validator *validator.CustomValidator, auditRepo repository.AuditLogMongoRepository,) *UserHandler {
 	return &UserHandler{
 		UserUC: userUC,
 		Validator: validator,
+		AuditRepo: auditRepo,
 	}
 }
+
 
 // Create User (POST /users)
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
@@ -47,11 +51,24 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ✅ Cek apakah email sudah digunakan
+	exists, err := h.UserUC.IsEmailExists(ctx, user.Email)
+	if err != nil {
+		span.RecordError(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if exists {
+		http.Error(w, "Email already exists", http.StatusConflict)
+		return
+	}
+
 	span.SetAttributes(
 		attribute.String("user.name", user.Name),
 		attribute.String("user.email", user.Email),
 	)
 
+	// ✅ Kirim ke Kafka
 	if err := h.UserUC.CreateUser(ctx, &user); err != nil {
 		span.RecordError(err)
 		http.Error(w, "Failed to send create event", http.StatusInternalServerError)
@@ -191,3 +208,29 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		"message": fmt.Sprintf("Delete user event for ID %d sent to Kafka", id),
 	})
 }
+
+func (h *UserHandler) GetUserAuditLogs(w http.ResponseWriter, r *http.Request) {
+	// Ambil user ID dari URL path parameter dengan chi
+	idStr := chi.URLParam(r, "id") // Ambil id dari path parameter {id}
+
+	if idStr == "" {
+		http.Error(w, "user id is required", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+
+	logs, err := h.AuditRepo.GetLogs(r.Context(), userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(logs)
+}
+

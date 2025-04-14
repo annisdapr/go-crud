@@ -10,13 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// type CodeReviewHandler struct {
-// 	CodeReviewUC usecase.ICodeReviewUsecase
-// }
-
-// func NewCodeReviewHandler(uc usecase.ICodeReviewUsecase) *CodeReviewHandler {
-// 	return &CodeReviewHandler{CodeReviewUC: uc}
-// }
 
 type CodeReviewHandler struct {
 	CodeReviewUC usecase.ICodeReviewUsecase
