@@ -64,13 +64,32 @@ func (kc *KafkaConsumer) Start(ctx context.Context) {
 		}
 	}
 }
-
 func (kc *KafkaConsumer) processEvent(ctx context.Context, event map[string]interface{}) {
 	eventType := fmt.Sprintf("%v", event["event"])
 	log.Printf("📥 Processing event: %s\n", eventType)
 
+	switch {
+	case isUserEvent(eventType):
+		kc.processUserEvent(ctx, eventType, event)
+
+	case isRepoEvent(eventType):
+		kc.processRepositoryEvent(ctx, eventType, event)
+
+	default:
+		log.Printf("⚠️ Unknown event type: %s\n", eventType)
+	}
+}
+
+func isUserEvent(eventType string) bool {
+	return eventType == "user.created" || eventType == "user.updated" || eventType == "user.deleted"
+}
+
+func isRepoEvent(eventType string) bool {
+	return eventType == "repository.created" || eventType == "repository.updated" || eventType == "repository.deleted"
+}
+
+func (kc *KafkaConsumer) processUserEvent(ctx context.Context, eventType string, event map[string]interface{}) {
 	switch eventType {
-	// User events
 	case "user.created":
 		user := entity.User{
 			Name:  fmt.Sprintf("%v", event["name"]),
@@ -94,8 +113,10 @@ func (kc *KafkaConsumer) processEvent(ctx context.Context, event map[string]inte
 	case "user.deleted":
 		id := toInt(event["id"])
 		kc.userRepo.DeleteUser(ctx, id)
-
-	// Repository events
+	}
+}
+func (kc *KafkaConsumer) processRepositoryEvent(ctx context.Context, eventType string, event map[string]interface{}) {
+	switch eventType {
 	case "repository.created":
 		repo := entity.Repository{
 			Name:      fmt.Sprintf("%v", event["name"]),
@@ -122,11 +143,72 @@ func (kc *KafkaConsumer) processEvent(ctx context.Context, event map[string]inte
 	case "repository.deleted":
 		id := toInt(event["id"])
 		kc.repoRepo.Delete(ctx, id)
-
-	default:
-		log.Printf("⚠️ Unknown event type: %s\n", eventType)
 	}
 }
+
+
+// func (kc *KafkaConsumer) processEvent(ctx context.Context, event map[string]interface{}) {
+// 	eventType := fmt.Sprintf("%v", event["event"])
+// 	log.Printf("📥 Processing event: %s\n", eventType)
+
+// 	switch eventType {
+// 	// User events
+// 	case "user.created":
+// 		user := entity.User{
+// 			Name:  fmt.Sprintf("%v", event["name"]),
+// 			Email: fmt.Sprintf("%v", event["email"]),
+// 		}
+// 		if err := kc.userRepo.CreateUser(ctx, &user); err != nil {
+// 			log.Printf("❌ Failed to create user from event: %v\n", err)
+// 		}
+
+// 	case "user.updated":
+// 		id := toInt(event["id"])
+// 		user, err := kc.userRepo.GetUserByID(ctx, id)
+// 		if err != nil {
+// 			log.Printf("❌ User not found for update: %v\n", err)
+// 			return
+// 		}
+// 		user.Name = fmt.Sprintf("%v", event["name"])
+// 		user.Email = fmt.Sprintf("%v", event["email"])
+// 		kc.userRepo.UpdateUser(ctx, user)
+
+// 	case "user.deleted":
+// 		id := toInt(event["id"])
+// 		kc.userRepo.DeleteUser(ctx, id)
+
+// 	// Repository events
+// 	case "repository.created":
+// 		repo := entity.Repository{
+// 			Name:      fmt.Sprintf("%v", event["name"]),
+// 			URL:       fmt.Sprintf("%v", event["url"]),
+// 			AIEnabled: toBool(event["ai_enabled"]),
+// 			UserID:    toInt(event["user_id"]),
+// 		}
+// 		if err := kc.repoRepo.CreateRepository(ctx, &repo); err != nil {
+// 			log.Printf("❌ Failed to create repository from event: %v\n", err)
+// 		}
+
+// 	case "repository.updated":
+// 		id := toInt(event["id"])
+// 		repo, err := kc.repoRepo.GetRepositoryByID(ctx, id)
+// 		if err != nil {
+// 			log.Printf("❌ Repository not found for update: %v\n", err)
+// 			return
+// 		}
+// 		repo.Name = fmt.Sprintf("%v", event["name"])
+// 		repo.URL = fmt.Sprintf("%v", event["url"])
+// 		repo.AIEnabled = toBool(event["ai_enabled"])
+// 		kc.repoRepo.Update(ctx, repo)
+
+// 	case "repository.deleted":
+// 		id := toInt(event["id"])
+// 		kc.repoRepo.Delete(ctx, id)
+
+// 	default:
+// 		log.Printf("⚠️ Unknown event type: %s\n", eventType)
+// 	}
+// }
 
 // Helper for type conversion
 func toInt(val interface{}) int {

@@ -44,7 +44,9 @@ func main() {
 	config.InitRedis()
 	defer config.CloseRedis()
 
-	kafkaProducer, _ := kafka.NewKafkaProducer("kafka:9092", "user-events")
+	kafkaBroker := os.Getenv("KAFKA_BROKER")
+	fmt.Println("🔥 Kafka broker dari env:", kafkaBroker)
+	kafkaProducer, _ := kafka.NewKafkaProducer(kafkaBroker, "user-events")
 
 	// Ambil URI dan DB name dari env
 	mongoURI := os.Getenv("MONGO_URI")
@@ -74,7 +76,7 @@ func main() {
 	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
 
 	// Init Kafka Consumer (user + repository events)
-	kafkaConsumer, err := kafka.NewKafkaConsumer("kafka:9092", "crud-group", "user-events", userRepo, repoRepo)
+	kafkaConsumer, err := kafka.NewKafkaConsumer(kafkaBroker, "crud-group", "user-events", userRepo, repoRepo)
 	if err != nil {
 		log.Fatalf("❌ Failed to start Kafka consumer: %v", err)
 	}
@@ -87,8 +89,6 @@ func main() {
 	go func() {
 		kafkaConsumer.Start(ctxConsumer)
 	}()
-
-
 
 	// Inisialisasi router
 	router := delivery.NewRouter(userUC, repoUC, codeReviewUC, config.DBPool, config.RedisClient, mongoClient)

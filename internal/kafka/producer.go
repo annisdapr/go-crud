@@ -2,9 +2,12 @@ package kafka
 
 import (
 	"encoding/json"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"log"
+	"os"
+
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
+
 
 type KafkaProducer struct {
 	producer *kafka.Producer
@@ -12,8 +15,10 @@ type KafkaProducer struct {
 }
 
 func NewKafkaProducer(broker, topic string) (*KafkaProducer, error) {
+	compression := os.Getenv("KAFKA_COMPRESSION")
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers": broker,
+		"compression.type":  compression,
 	})
 	if err != nil {
 		return nil, err

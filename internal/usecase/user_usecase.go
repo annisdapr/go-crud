@@ -10,6 +10,7 @@ import (
 	"go-crud/internal/kafka"
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
+	"go-crud/internal/circuitbreaker"
 
 	"time"
 
@@ -46,22 +47,13 @@ type UserInput struct {
 
 // NewUserUsecase membuat instance UserUsecase
 func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client, kafkaProducer *kafka.KafkaProducer, auditRepo repository.AuditLogMongoRepository) IUserUsecase {
-	cbRedis := gobreaker.NewCircuitBreaker(gobreaker.Settings{
-		Name:    "RedisBreaker",
-		Timeout: 5 * time.Second,
-	})
-
-	cbPostgres := gobreaker.NewCircuitBreaker(gobreaker.Settings{
-		Name:    "PostgresBreaker",
-		Timeout: 5 * time.Second,
-	})
 	return &UserUsecase{
 		UserRepo:      userRepo,
 		auditRepo: auditRepo,
 		redisClient:   redisClient,
 		kafkaProducer: kafkaProducer,
-		cbRedis:       cbRedis,
-		cbPostgres:    cbPostgres,
+		cbRedis:    cbreaker.NewBreaker("RedisBreaker"),
+		cbPostgres: cbreaker.NewBreaker("PostgresBreaker"),
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"go-crud/internal/kafka"
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
+	"go-crud/internal/circuitbreaker"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -48,16 +49,12 @@ func NewRepositoryUsecase(
 	kafkaProducer *kafka.KafkaProducer,
 	redisClient *redis.Client,
 ) IRepositoryUsecase {
-	cbRedis := gobreaker.NewCircuitBreaker(gobreaker.Settings{
-		Name:    "RepositoryRedisCB",
-		Timeout: 5 * time.Second,
-	})
 	return &RepositoryUsecase{
 		repoRepo:      repoRepo,
 		userRepo:      userRepo,
 		kafkaProducer: kafkaProducer,
 		redisClient:   redisClient,
-		cbRedis:       cbRedis,
+		cbRedis: cbreaker.NewBreaker("RepositoryRedisCB"),
 	}
 }
 
