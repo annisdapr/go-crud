@@ -46,7 +46,11 @@ func main() {
 
 	kafkaBroker := os.Getenv("KAFKA_BROKER")
 	fmt.Println("🔥 Kafka broker dari env:", kafkaBroker)
-	kafkaProducer, _ := kafka.NewKafkaProducer(kafkaBroker, "user-events")
+	// kafkaProducer, err := kafka.NewKafkaProducer(kafkaBroker)
+	// if err != nil {
+	// 	log.Fatalf("❌ Failed to create Kafka producer: %v", err)
+	// }
+
 
 	// Ambil URI dan DB name dari env
 	mongoURI := os.Getenv("MONGO_URI")
@@ -69,14 +73,14 @@ func main() {
 	userRepo := repository.NewUserRepository(config.DBPool)
 	repoRepo := repository.NewRepositoryRepository(config.DBPool)
 	codeReviewRepo := repository.NewCodeReviewRepository(config.DBPool)
-	auditRepo := repository.NewAuditLogMongoRepository(mongoDB)
+	// auditRepo := repository.NewAuditLogMongoRepository(mongoDB)
 
-	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient, kafkaProducer, auditRepo)
-	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo, kafkaProducer, config.RedisClient)
+	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient)
+	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo, config.RedisClient)
 	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
 
 	// Init Kafka Consumer (user + repository events)
-	kafkaConsumer, err := kafka.NewKafkaConsumer(kafkaBroker, "crud-group", "user-events", userRepo, repoRepo)
+	kafkaConsumer, err := kafka.NewKafkaConsumer(kafkaBroker, "crud-group", "user-events", userUC, repoUC)
 	if err != nil {
 		log.Fatalf("❌ Failed to start Kafka consumer: %v", err)
 	}

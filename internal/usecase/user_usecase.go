@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"go-crud/internal/entity"
-	"go-crud/internal/kafka"
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
 	"go-crud/internal/circuitbreaker"
@@ -30,28 +29,23 @@ type IUserUsecase interface {
 
 // UserUsecase mengelola logika bisnis untuk User
 type UserUsecase struct {
-    UserRepo repository.UserRepository
-	auditRepo    repository.AuditLogMongoRepository
-	redisClient *redis.Client
-	kafkaProducer *kafka.KafkaProducer 
-	cbRedis        *gobreaker.CircuitBreaker
+	UserRepo   repository.UserRepository
+	redis      *redis.Client
+	cbRedis    *gobreaker.CircuitBreaker
 	cbPostgres *gobreaker.CircuitBreaker
-
 }
 
-// Struct untuk input user (perbaikan undefined: UserInput)
 type UserInput struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
 
 // NewUserUsecase membuat instance UserUsecase
-func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client, kafkaProducer *kafka.KafkaProducer, auditRepo repository.AuditLogMongoRepository) IUserUsecase {
+
+func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client) IUserUsecase {
 	return &UserUsecase{
-		UserRepo:      userRepo,
-		auditRepo: auditRepo,
-		redisClient:   redisClient,
-		kafkaProducer: kafkaProducer,
+		UserRepo:   userRepo,
+		redis:      redisClient,
 		cbRedis:    cbreaker.NewBreaker("RedisBreaker"),
 		cbPostgres: cbreaker.NewBreaker("PostgresBreaker"),
 	}
@@ -64,62 +58,50 @@ func (uc *UserUsecase) IsEmailExists(ctx context.Context, email string) (bool, e
 	_, err := uc.UserRepo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil // email tidak ditemukan
+			return false, nil
 		}
-		return false, err // error lain
+		return false, err
 	}
-	return true, nil // email ditemukan
+	return true, nil
 }
 
-// CreateUser mengirim event ke Kafka untuk dibuat oleh consumer
+// ✅ Validasi untuk user creation
 func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error {
 	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.CreateUser")
 	defer span.End()
 
-	// Set waktu sekarang
-	now := time.Now()
-
-	// Siapkan event payload
-	event := map[string]interface{}{
-		"event":      "user.created",
-		"id":         user.ID, 
-		"name":       user.Name,
-		"email":      user.Email,
-		"time":       now.Format(time.RFC3339),
+	// Validasi duplicate email
+	exists, err := uc.IsEmailExists(ctx, user.Email)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("email already in use")
 	}
 
-	// Publish ke Kafka
-	go uc.kafkaProducer.Publish(event, "user.created")
-	_ = uc.auditRepo.InsertLog(ctx, &entity.AuditLog{
-		UserID:   user.ID,
-		UserName: user.Name,
-		Action:   "User created",
-	})	
-
-	// Tidak langsung insert ke database
+	// Tidak insert ke DB langsung (tugas Kafka consumer)
 	return nil
 }
 
-// GetAllUsers mengambil semua data user dari database
+// ✅ Get all users langsung ke repo
 func (uc *UserUsecase) GetAllUsers(ctx context.Context) ([]entity.User, error) {
-	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.GetAllUsers") 
+	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.GetAllUsers")
 	defer span.End()
 
 	return uc.UserRepo.GetAllUsers(ctx)
 }
 
-// GetUserByID dengan Redis caching
+// ✅ Get user dari cache (Redis) atau DB
 func (uc *UserUsecase) GetUserByID(ctx context.Context, id int) (*entity.User, error) {
 	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.GetUserById")
 	defer span.End()
 
 	cacheKey := fmt.Sprintf("user:%d", id)
 
-	// ✅ Ambil dari Redis dengan circuit breaker
+	// Coba ambil dari Redis
 	val, err := uc.cbRedis.Execute(func() (interface{}, error) {
-		return uc.redisClient.Get(ctx, cacheKey).Result()
+		return uc.redis.Get(ctx, cacheKey).Result()
 	})
-
 	if err == nil {
 		var cachedUser entity.User
 		if unmarshalErr := json.Unmarshal([]byte(val.(string)), &cachedUser); unmarshalErr == nil {
@@ -127,25 +109,17 @@ func (uc *UserUsecase) GetUserByID(ctx context.Context, id int) (*entity.User, e
 		}
 	}
 
-	// ✅ Ambil dari PostgreSQL dengan circuit breaker
+	// Ambil dari DB
 	result, err := uc.cbPostgres.Execute(func() (interface{}, error) {
 		return uc.UserRepo.GetUserByID(ctx, id)
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	user := result.(*entity.User)
-
-	// ✅ Simpan ke Redis dengan circuit breaker
-	userJSON, _ := json.Marshal(user)
-	_, _ = uc.cbRedis.Execute(func() (interface{}, error) {
-		return nil, uc.redisClient.Set(ctx, cacheKey, userJSON, 2*time.Minute).Err()
-	})
-
-	return user, nil
+	return result.(*entity.User), nil
 }
 
+// ✅ Update user (hanya update DB dan return hasil)
 func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) (entity.User, error) {
 	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.UpdateUser")
 	defer span.End()
@@ -164,46 +138,15 @@ func (uc *UserUsecase) UpdateUser(ctx context.Context, id int, input UserInput) 
 		return entity.User{}, err
 	}
 
-	cacheKey := fmt.Sprintf("user:%d", id)
-	uc.redisClient.Del(ctx, cacheKey)
-
-	// 👇 Publish Kafka event
-	event := map[string]interface{}{
-		"event": "user.updated",
-		"id":    user.ID,
-		"name":  user.Name,
-		"email": user.Email,
-		"time":  user.UpdatedAt.Format(time.RFC3339),
-	}
-	go uc.kafkaProducer.Publish(event, "user.updated")
-
-	// 👇 Simpan audit log ke MongoDB
-	go uc.auditRepo.InsertLog(ctx, &entity.AuditLog{
-		UserID:   user.ID,
-		UserName: user.Name,
-		Action:   "User updated",
-	})
-
+	// Cache dan audit dilakukan di layer atas
 	return *user, nil
 }
 
-
-// Hapus cache di Redis setelah delete
-// DeleteUser mengirim event user.deleted ke Kafka
+// ✅ Delete user (tugas Kafka consumer nanti)
 func (uc *UserUsecase) DeleteUser(ctx context.Context, id int) error {
-	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.DeleteUser")
+	_, span := tracing.Tracer.Start(ctx, "UserUsecase.DeleteUser")
 	defer span.End()
 
-	// Buat event payload
-	event := map[string]interface{}{
-		"event": "user.deleted",
-		"id":    id,
-		"time":  time.Now().Format(time.RFC3339),
-	}
-
-	// Publish ke Kafka
-	go uc.kafkaProducer.Publish(event, "user.deleted")
-
-	// Tidak langsung hapus dari database
+	// Tidak hapus langsung dari DB
 	return nil
 }

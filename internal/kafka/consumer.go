@@ -5,24 +5,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-crud/internal/entity"
-	"go-crud/internal/repository"
+	"go-crud/internal/usecase"
 	"log"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 type KafkaConsumer struct {
-	consumer     *kafka.Consumer
-	userRepo     repository.UserRepository
-	repoRepo     repository.RepositoryRepository
+	consumer        *kafka.Consumer
+	userUsecase     usecase.IUserUsecase
+	repoUsecase     usecase.IRepositoryUsecase
 }
 
-func NewKafkaConsumer(broker, groupID, topic string, userRepo repository.UserRepository, repoRepo repository.RepositoryRepository) (*KafkaConsumer, error) {
+func NewKafkaConsumer(
+	broker, groupID, topic string,
+	userUC usecase.IUserUsecase,
+	repoUC usecase.IRepositoryUsecase,
+) (*KafkaConsumer, error){
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": broker,
-		"group.id":          groupID,
-		"auto.offset.reset": "earliest",
+		"bootstrap.servers":  broker,
+		"group.id":           groupID,
+		"auto.offset.reset":  "earliest", // atau "latest" tergantung kebutuhan
+		"enable.auto.commit": true,       // ✅ AUTO COMMIT DIHIDUPKAN
+		"auto.commit.interval.ms": 5000,  // (opsional) commit tiap 5 detik
 	})
+	
 	if err != nil {
 		return nil, err
 	}
@@ -32,10 +39,11 @@ func NewKafkaConsumer(broker, groupID, topic string, userRepo repository.UserRep
 	}
 
 	return &KafkaConsumer{
-		consumer: c,
-		userRepo: userRepo,
-		repoRepo: repoRepo,
+		consumer:    c,
+		userUsecase: userUC,
+		repoUsecase: repoUC,
 	}, nil
+	
 }
 
 func (kc *KafkaConsumer) Start(ctx context.Context) {
@@ -60,25 +68,27 @@ func (kc *KafkaConsumer) Start(ctx context.Context) {
 				continue
 			}
 
-			kc.processEvent(ctx, event)
+			topic := *msg.TopicPartition.Topic
+			kc.routeEventByTopic(ctx, topic, event)
 		}
 	}
 }
-func (kc *KafkaConsumer) processEvent(ctx context.Context, event map[string]interface{}) {
-	eventType := fmt.Sprintf("%v", event["event"])
-	log.Printf("📥 Processing event: %s\n", eventType)
 
-	switch {
-	case isUserEvent(eventType):
-		kc.processUserEvent(ctx, eventType, event)
+func (kc *KafkaConsumer) routeEventByTopic(ctx context.Context, topic string, event map[string]interface{}) {
+	log.Printf("📥 Processing event from topic: %s\n", topic)
 
-	case isRepoEvent(eventType):
-		kc.processRepositoryEvent(ctx, eventType, event)
+	switch topic {
+	case "user-events":
+		kc.processUserEvent(ctx, event)
+
+	case "repository-events":
+		kc.processRepositoryEvent(ctx, event)
 
 	default:
-		log.Printf("⚠️ Unknown event type: %s\n", eventType)
+		log.Printf("⚠️ Unknown topic: %s\n", topic)
 	}
 }
+
 
 func isUserEvent(eventType string) bool {
 	return eventType == "user.created" || eventType == "user.updated" || eventType == "user.deleted"
@@ -88,63 +98,101 @@ func isRepoEvent(eventType string) bool {
 	return eventType == "repository.created" || eventType == "repository.updated" || eventType == "repository.deleted"
 }
 
-func (kc *KafkaConsumer) processUserEvent(ctx context.Context, eventType string, event map[string]interface{}) {
+func (kc *KafkaConsumer) processUserEvent(ctx context.Context, event map[string]interface{}) {
+	eventType := fmt.Sprintf("%v", event["event"])
+
 	switch eventType {
 	case "user.created":
-		user := entity.User{
+		user := &entity.User{
 			Name:  fmt.Sprintf("%v", event["name"]),
 			Email: fmt.Sprintf("%v", event["email"]),
 		}
-		if err := kc.userRepo.CreateUser(ctx, &user); err != nil {
+		err := kc.userUsecase.CreateUser(ctx, user)
+		if err != nil {
 			log.Printf("❌ Failed to create user from event: %v\n", err)
-		}
+		}		
 
 	case "user.updated":
 		id := toInt(event["id"])
-		user, err := kc.userRepo.GetUserByID(ctx, id)
-		if err != nil {
-			log.Printf("❌ User not found for update: %v\n", err)
-			return
+		input := usecase.UserInput{
+			Name:  fmt.Sprintf("%v", event["name"]),
+			Email: fmt.Sprintf("%v", event["email"]),
 		}
-		user.Name = fmt.Sprintf("%v", event["name"])
-		user.Email = fmt.Sprintf("%v", event["email"])
-		kc.userRepo.UpdateUser(ctx, user)
+		_, err := kc.userUsecase.UpdateUser(ctx, id, input)
+		if err != nil {
+			log.Printf("❌ Failed to update user from event: %v\n", err)
+		}
 
 	case "user.deleted":
 		id := toInt(event["id"])
-		kc.userRepo.DeleteUser(ctx, id)
+		err := kc.userUsecase.DeleteUser(ctx, id)
+		if err != nil {
+			log.Printf("❌ Failed to delete user from event: %v\n", err)
+		}
+
+	default:
+		log.Printf("⚠️ Unknown user event: %s\n", eventType)
 	}
 }
-func (kc *KafkaConsumer) processRepositoryEvent(ctx context.Context, eventType string, event map[string]interface{}) {
+
+
+func (kc *KafkaConsumer) processRepositoryEvent(ctx context.Context, event map[string]interface{}) {
+	eventType := fmt.Sprintf("%v", event["event"])
+
 	switch eventType {
 	case "repository.created":
-		repo := entity.Repository{
+		repoInput := entity.Repository{
 			Name:      fmt.Sprintf("%v", event["name"]),
 			URL:       fmt.Sprintf("%v", event["url"]),
 			AIEnabled: toBool(event["ai_enabled"]),
 			UserID:    toInt(event["user_id"]),
 		}
-		if err := kc.repoRepo.CreateRepository(ctx, &repo); err != nil {
+		err := kc.repoUsecase.CreateRepository(ctx, &repoInput)
+		if err != nil {
 			log.Printf("❌ Failed to create repository from event: %v\n", err)
 		}
 
 	case "repository.updated":
 		id := toInt(event["id"])
-		repo, err := kc.repoRepo.GetRepositoryByID(ctx, id)
-		if err != nil {
-			log.Printf("❌ Repository not found for update: %v\n", err)
-			return
+		repoInput := usecase.RepositoryInput{
+			Name:      fmt.Sprintf("%v", event["name"]),
+			URL:       fmt.Sprintf("%v", event["url"]),
+			AIEnabled: toBool(event["ai_enabled"]),
 		}
-		repo.Name = fmt.Sprintf("%v", event["name"])
-		repo.URL = fmt.Sprintf("%v", event["url"])
-		repo.AIEnabled = toBool(event["ai_enabled"])
-		kc.repoRepo.Update(ctx, repo)
+		_, err := kc.repoUsecase.UpdateRepository(ctx, id, repoInput)
+		if err != nil {
+			log.Printf("❌ Failed to update repository from event: %v\n", err)
+		}
 
 	case "repository.deleted":
 		id := toInt(event["id"])
-		kc.repoRepo.Delete(ctx, id)
+		err := kc.repoUsecase.DeleteRepository(ctx, id)
+		if err != nil {
+			log.Printf("❌ Failed to delete repository from event: %v\n", err)
+		}
+
+	default:
+		log.Printf("⚠️ Unknown repository event: %s\n", eventType)
 	}
 }
+
+
+
+// Helper for type conversion
+func toInt(val interface{}) int {
+	if f, ok := val.(float64); ok {
+		return int(f)
+	}
+	return 0
+}
+
+func toBool(val interface{}) bool {
+	if b, ok := val.(bool); ok {
+		return b
+	}
+	return false
+}
+
 
 
 // func (kc *KafkaConsumer) processEvent(ctx context.Context, event map[string]interface{}) {
@@ -209,18 +257,3 @@ func (kc *KafkaConsumer) processRepositoryEvent(ctx context.Context, eventType s
 // 		log.Printf("⚠️ Unknown event type: %s\n", eventType)
 // 	}
 // }
-
-// Helper for type conversion
-func toInt(val interface{}) int {
-	if f, ok := val.(float64); ok {
-		return int(f)
-	}
-	return 0
-}
-
-func toBool(val interface{}) bool {
-	if b, ok := val.(bool); ok {
-		return b
-	}
-	return false
-}

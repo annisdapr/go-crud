@@ -15,7 +15,6 @@ var DBPool *pgxpool.Pool
 
 // InitDB menginisialisasi koneksi database
 func InitDB() {
-	// Load environment variables dari .env
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Warning: Tidak bisa memuat file .env, menggunakan default environment.")

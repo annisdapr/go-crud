@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"go-crud/internal/entity"
-	"go-crud/internal/kafka"
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
 	"go-crud/internal/circuitbreaker"
@@ -28,11 +27,11 @@ type IRepositoryUsecase interface {
 
 // Struct RepositoryUsecase
 type RepositoryUsecase struct {
-	repoRepo repository.RepositoryRepository
-	userRepo repository.UserRepository
-	kafkaProducer *kafka.KafkaProducer
-	redisClient   *redis.Client
-	cbRedis       *gobreaker.CircuitBreaker
+	repoRepo   repository.RepositoryRepository
+	userRepo   repository.UserRepository
+	redis      *redis.Client
+	cbRedis    *gobreaker.CircuitBreaker
+	cbPostgres *gobreaker.CircuitBreaker
 }
 
 // Input struct untuk repository
@@ -46,21 +45,20 @@ type RepositoryInput struct {
 func NewRepositoryUsecase(
 	repoRepo repository.RepositoryRepository,
 	userRepo repository.UserRepository,
-	kafkaProducer *kafka.KafkaProducer,
 	redisClient *redis.Client,
 ) IRepositoryUsecase {
 	return &RepositoryUsecase{
-		repoRepo:      repoRepo,
-		userRepo:      userRepo,
-		kafkaProducer: kafkaProducer,
-		redisClient:   redisClient,
-		cbRedis: cbreaker.NewBreaker("RepositoryRedisCB"),
+		repoRepo:   repoRepo,
+		userRepo:   userRepo,
+		redis:      redisClient,
+		cbRedis:    cbreaker.NewBreaker("RepositoryRedisCB"),
+		cbPostgres: cbreaker.NewBreaker("RepositoryPostgresCB"),
 	}
 }
 
-
+// ✅ Create hanya validasi user dan kembalikan nil untuk Kafka layer
 func (u *RepositoryUsecase) CreateRepository(ctx context.Context, repo *entity.Repository) error {
-	ctx, span := tracing.Tracer.Start(ctx, "CreateRepository")
+	ctx, span := tracing.Tracer.Start(ctx, "RepositoryUsecase.CreateRepository")
 	defer span.End()
 
 	_, err := u.userRepo.GetUserByID(ctx, repo.UserID)
@@ -68,85 +66,63 @@ func (u *RepositoryUsecase) CreateRepository(ctx context.Context, repo *entity.R
 		return errors.New("user not found")
 	}
 
-	err = u.repoRepo.CreateRepository(ctx, repo)
-	if err != nil {
-		return err
-	}
-
-	event := map[string]interface{}{
-		"event":    "repository.created",
-		"id":       repo.ID,
-		"user_id":  repo.UserID,
-		"name":     repo.Name,
-		"url":      repo.URL,
-		"ai_enabled": repo.AIEnabled,
-	}
-	go u.kafkaProducer.Publish(event, "repository.created")
-
+	// Tidak langsung simpan ke DB, tugas Kafka consumer
 	return nil
 }
 
-
+// ✅ Ambil semua repo
 func (u *RepositoryUsecase) GetAllRepositories(ctx context.Context) ([]entity.Repository, error) {
-	ctx, span := tracing.Tracer.Start(ctx, "GetAllRepositories") 
+	ctx, span := tracing.Tracer.Start(ctx, "RepositoryUsecase.GetAllRepositories")
 	defer span.End()
+
 	return u.repoRepo.GetAllRepositories(ctx)
 }
 
+// ✅ Ambil semua repo berdasarkan user
 func (u *RepositoryUsecase) GetRepositoriesByUserID(ctx context.Context, userID int) ([]entity.Repository, error) {
-	ctx, span := tracing.Tracer.Start(ctx, "GetRepositoriesByUserID") 
+	ctx, span := tracing.Tracer.Start(ctx, "RepositoryUsecase.GetRepositoriesByUserID")
 	defer span.End()
-	
-	// Pastikan user ada sebelum mengambil repositorinya
+
 	_, err := u.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
-		span.RecordError(err) 
+		span.RecordError(err)
 		return nil, errors.New("user not found")
 	}
 
-	repos, err := u.repoRepo.GetRepositoriesByUserID(ctx, userID)
-	if err != nil {
-		span.RecordError(err) 
-		return nil, err
-	}
-
-	return repos, nil
+	return u.repoRepo.GetRepositoriesByUserID(ctx, userID)
 }
 
-
+// ✅ Get by ID, coba cache, fallback ke DB
 func (u *RepositoryUsecase) GetRepositoryByID(ctx context.Context, id int) (*entity.Repository, error) {
-	ctx, span := tracing.Tracer.Start(ctx, "GetRepositoryByID") 
+	ctx, span := tracing.Tracer.Start(ctx, "RepositoryUsecase.GetRepositoryByID")
 	defer span.End()
 
 	cacheKey := fmt.Sprintf("repository:%d", id)
 
 	val, err := u.cbRedis.Execute(func() (interface{}, error) {
-		return u.redisClient.Get(ctx, cacheKey).Result()
+		return u.redis.Get(ctx, cacheKey).Result()
 	})
-
 	if err == nil {
-		var cachedRepo entity.Repository
-		if unmarshalErr := json.Unmarshal([]byte(val.(string)), &cachedRepo); unmarshalErr == nil {
-			return &cachedRepo, nil
+		var cached entity.Repository
+		if unmarshalErr := json.Unmarshal([]byte(val.(string)), &cached); unmarshalErr == nil {
+			return &cached, nil
 		}
 	}
 
-	// Fallback ke database
-	repo, err := u.repoRepo.GetRepositoryByID(ctx, id)
+	// Ambil dari DB
+	result, err := u.cbPostgres.Execute(func() (interface{}, error) {
+		return u.repoRepo.GetRepositoryByID(ctx, id)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	repoJSON, _ := json.Marshal(repo)
-	_, _ = u.cbRedis.Execute(func() (interface{}, error) {
-		return nil, u.redisClient.Set(ctx, cacheKey, repoJSON, 2*time.Minute).Err()
-	})
-
-	return repo, nil
+	return result.(*entity.Repository), nil
 }
 
+// ✅ Update hanya ubah data, tidak push Kafka/cache
 func (u *RepositoryUsecase) UpdateRepository(ctx context.Context, id int, input RepositoryInput) (entity.Repository, error) {
-	ctx, span := tracing.Tracer.Start(ctx, "UpdateRepository")
+	ctx, span := tracing.Tracer.Start(ctx, "RepositoryUsecase.UpdateRepository")
 	defer span.End()
 
 	repo, err := u.repoRepo.GetRepositoryByID(ctx, id)
@@ -157,52 +133,20 @@ func (u *RepositoryUsecase) UpdateRepository(ctx context.Context, id int, input 
 	repo.Name = input.Name
 	repo.URL = input.URL
 	repo.AIEnabled = input.AIEnabled
+	repo.UpdatedAt = time.Now()
 
 	if err := u.repoRepo.Update(ctx, repo); err != nil {
 		return entity.Repository{}, err
 	}
 
-	event := map[string]interface{}{
-		"event":      "repository.updated",
-		"id":         repo.ID,
-		"user_id":    repo.UserID,
-		"name":       repo.Name,
-		"url":        repo.URL,
-		"ai_enabled": repo.AIEnabled,
-	}
-	go u.kafkaProducer.Publish(event, "repository.updated")
-
-	// Hapus cache setelah update dan publish event
-	go func() {
-		cacheKey := fmt.Sprintf("repository:%d", id)
-		_ = u.redisClient.Del(context.Background(), cacheKey).Err()
-	}()
-
 	return *repo, nil
 }
 
-
+// ✅ Delete hanya validasi, tanpa DB call langsung
 func (u *RepositoryUsecase) DeleteRepository(ctx context.Context, id int) error {
-	ctx, span := tracing.Tracer.Start(ctx, "DeleteRepository")
+	_, span := tracing.Tracer.Start(ctx, "RepositoryUsecase.DeleteRepository")
 	defer span.End()
 
-	if err := u.repoRepo.Delete(ctx, id); err != nil {
-		return err
-	}
-
-	event := map[string]interface{}{
-		"event": "repository.deleted",
-		"id":    id,
-	}
-	go u.kafkaProducer.Publish(event, "repository.deleted")
-
-	// Hapus cache tanpa blocking
-	go func() {
-		cacheKey := fmt.Sprintf("repository:%d", id)
-		_ = u.redisClient.Del(context.Background(), cacheKey).Err()
-	}()
-
+	// Tidak langsung hapus dari DB (tugas consumer)
 	return nil
 }
-
-

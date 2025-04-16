@@ -8,13 +8,11 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
-
 type KafkaProducer struct {
 	producer *kafka.Producer
-	topic    string
 }
 
-func NewKafkaProducer(broker, topic string) (*KafkaProducer, error) {
+func NewKafkaProducer(broker string) (*KafkaProducer, error) {
 	compression := os.Getenv("KAFKA_COMPRESSION")
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers": broker,
@@ -24,24 +22,19 @@ func NewKafkaProducer(broker, topic string) (*KafkaProducer, error) {
 		return nil, err
 	}
 
-	return &KafkaProducer{
-		producer: p,
-		topic:    topic,
-	}, nil
+	return &KafkaProducer{producer: p}, nil
 }
 
-func (kp *KafkaProducer) Publish(message interface{}, eventType string) error {
-	// Marshal pesan ke JSON
+func (kp *KafkaProducer) Publish(topic string, message interface{}, eventType string) error {
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("❌ Failed to marshal message: %v", err)
 		return err
 	}
 
-	// Buat pesan Kafka dengan raw JSON (byte slice)
 	return kp.producer.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{
-			Topic:     &kp.topic,
+			Topic:     &topic,
 			Partition: int32(kafka.PartitionAny),
 		},
 		Value: messageBytes,
