@@ -10,6 +10,7 @@ import (
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
 	"go-crud/internal/circuitbreaker"
+	"go-crud/internal/usecase/port"
 
 	"time"
 
@@ -33,6 +34,7 @@ type UserUsecase struct {
 	redis      *redis.Client
 	cbRedis    *gobreaker.CircuitBreaker
 	cbPostgres *gobreaker.CircuitBreaker
+	EventPublisher port.EventPublisher 
 }
 
 type UserInput struct {
@@ -42,12 +44,13 @@ type UserInput struct {
 
 // NewUserUsecase membuat instance UserUsecase
 
-func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client) IUserUsecase {
+func NewUserUsecase(userRepo repository.UserRepository, redisClient *redis.Client, userPublisher port.EventPublisher) IUserUsecase {
 	return &UserUsecase{
 		UserRepo:   userRepo,
 		redis:      redisClient,
 		cbRedis:    cbreaker.NewBreaker("RedisBreaker"),
 		cbPostgres: cbreaker.NewBreaker("PostgresBreaker"),
+		EventPublisher: userPublisher,
 	}
 }
 
@@ -65,23 +68,31 @@ func (uc *UserUsecase) IsEmailExists(ctx context.Context, email string) (bool, e
 	return true, nil
 }
 
-// ✅ Validasi untuk user creation
+// ✅ Validasi dan kirim event untuk user creation
 func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error {
 	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.CreateUser")
 	defer span.End()
 
-	// Validasi duplicate email
+	// Cek apakah email sudah digunakan
 	exists, err := uc.IsEmailExists(ctx, user.Email)
 	if err != nil {
-		return err
+		span.RecordError(err)
+		return fmt.Errorf("failed to check email existence: %w", err)
 	}
 	if exists {
 		return fmt.Errorf("email already in use")
 	}
 
-	// Tidak insert ke DB langsung (tugas Kafka consumer)
+	// Kirim event user.created (tidak menyimpan ke DB, hanya publish)
+	if err := uc.EventPublisher.PublishUserCreated(ctx, user); err != nil {
+		span.RecordError(err)
+		return fmt.Errorf("failed to publish user.created event: %w", err)
+	}
+
+	// Tidak menyimpan ke DB di sini
 	return nil
 }
+
 
 // ✅ Get all users langsung ke repo
 func (uc *UserUsecase) GetAllUsers(ctx context.Context) ([]entity.User, error) {

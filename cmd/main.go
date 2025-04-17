@@ -46,10 +46,28 @@ func main() {
 
 	kafkaBroker := os.Getenv("KAFKA_BROKER")
 	fmt.Println("🔥 Kafka broker dari env:", kafkaBroker)
-	// kafkaProducer, err := kafka.NewKafkaProducer(kafkaBroker)
-	// if err != nil {
-	// 	log.Fatalf("❌ Failed to create Kafka producer: %v", err)
-	// }
+// Init Kafka Producer
+	kafkaProducer, err := kafka.NewKafkaProducer(kafkaBroker)
+	if err != nil {
+		log.Fatalf("❌ Failed to create Kafka producer: %v", err)
+	}
+
+// Kirim dummy event untuk memicu auto-create topik
+	dummyEvent := map[string]interface{}{
+		"event": "user.created",
+		"name":  "dummy",
+		"email": "dummy@example.com",
+	}
+
+	err = kafkaProducer.Publish("user-events", dummyEvent, "user.created")
+	if err != nil {
+		log.Fatalf("❌ Failed to publish dummy event: %v", err)
+	}
+
+	log.Println("✅ Dummy message sent to Kafka topic: user-events")
+
+	defer kafkaProducer.Close()
+
 
 
 	// Ambil URI dan DB name dari env
@@ -75,7 +93,9 @@ func main() {
 	codeReviewRepo := repository.NewCodeReviewRepository(config.DBPool)
 	// auditRepo := repository.NewAuditLogMongoRepository(mongoDB)
 
-	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient)
+	userPublisher := kafka.NewKafkaUserPublisher(kafkaProducer.Producer)
+
+	userUC := usecase.NewUserUsecase(userRepo, config.RedisClient, userPublisher)
 	repoUC := usecase.NewRepositoryUsecase(repoRepo, userRepo, config.RedisClient)
 	codeReviewUC := usecase.NewCodeReviewUsecase(codeReviewRepo, &wg)
 

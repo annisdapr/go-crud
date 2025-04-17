@@ -30,13 +30,20 @@ func NewKafkaConsumer(
 		"auto.commit.interval.ms": 5000,  // (opsional) commit tiap 5 detik
 	})
 	
+	
 	if err != nil {
+		log.Printf("❌ Error creating consumer: %v\n", err)
 		return nil, err
 	}
 
 	if err := c.SubscribeTopics([]string{topic}, nil); err != nil {
+		log.Printf("❌ Error subscribing to topic: %v\n", err)
 		return nil, err
 	}
+
+	log.Printf("✅ Kafka consumer subscribed to topic: %s\n", topic)
+
+
 
 	return &KafkaConsumer{
 		consumer:    c,
@@ -62,6 +69,10 @@ func (kc *KafkaConsumer) Start(ctx context.Context) {
 				continue
 			}
 
+			log.Printf("📨 Received message from topic: %s\n", *msg.TopicPartition.Topic)
+			log.Printf("📥 Message value: %s\n", string(msg.Value))
+
+
 			var event map[string]interface{}
 			if err := json.Unmarshal(msg.Value, &event); err != nil {
 				log.Printf("⚠️ Failed to unmarshal message: %v\n", err)
@@ -69,6 +80,7 @@ func (kc *KafkaConsumer) Start(ctx context.Context) {
 			}
 
 			topic := *msg.TopicPartition.Topic
+			log.Printf("📋 Routing event by topic: %s\n", topic)
 			kc.routeEventByTopic(ctx, topic, event)
 		}
 	}
@@ -76,6 +88,8 @@ func (kc *KafkaConsumer) Start(ctx context.Context) {
 
 func (kc *KafkaConsumer) routeEventByTopic(ctx context.Context, topic string, event map[string]interface{}) {
 	log.Printf("📥 Processing event from topic: %s\n", topic)
+	log.Printf("📥 Processing event from topic: %s\n", topic)
+	log.Printf("🧾 Event payload received: %+v\n", event) 
 
 	switch topic {
 	case "user-events":
@@ -100,6 +114,7 @@ func isRepoEvent(eventType string) bool {
 
 func (kc *KafkaConsumer) processUserEvent(ctx context.Context, event map[string]interface{}) {
 	eventType := fmt.Sprintf("%v", event["event"])
+	log.Printf("🔍 Handling user event type: %s | Data: %+v\n", eventType, event)
 
 	switch eventType {
 	case "user.created":

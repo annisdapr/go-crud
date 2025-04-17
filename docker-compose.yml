@@ -63,9 +63,9 @@ services:
       mongo:
         condition: service_started
       kafka:
-        condition: service_started
+        condition: service_healthy
       zookeeper:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env 
     ports:
@@ -118,6 +118,11 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
     networks:
       - go_crud_network
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   kafka:
     image: confluentinc/cp-kafka:latest
@@ -129,8 +134,14 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     networks:
       - go_crud_network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
       
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -142,8 +153,10 @@ services:
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
       - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
     depends_on:
-      - kafka
-      - zookeeper
+      kafka:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
     networks:
       - go_crud_network
 
