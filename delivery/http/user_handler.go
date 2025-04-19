@@ -7,6 +7,7 @@ import (
 	"go-crud/internal/usecase"
 	"go-crud/internal/validator"
 	"go-crud/internal/repository"
+	"go-crud/internal/kafka"
 	"net/http"
 	"strconv"
 
@@ -20,13 +21,15 @@ type UserHandler struct {
 	UserUC usecase.IUserUsecase
 	Validator *validator.CustomValidator
 	AuditRepo   repository.AuditLogMongoRepository
+	Producer   kafka.KafkaProducer
 }
 
-func NewUserHandler(userUC usecase.IUserUsecase, validator *validator.CustomValidator, auditRepo repository.AuditLogMongoRepository,) *UserHandler {
+func NewUserHandler(userUC usecase.IUserUsecase, validator *validator.CustomValidator, auditRepo repository.AuditLogMongoRepository, producer kafka.KafkaProducer) *UserHandler {
 	return &UserHandler{
 		UserUC: userUC,
 		Validator: validator,
 		AuditRepo: auditRepo,
+		Producer:   producer,
 	}
 }
 
@@ -68,10 +71,24 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		attribute.String("user.email", user.Email),
 	)
 
+	eventData := map[string]interface{}{
+		"name":  user.Name,
+		"email": user.Email,
+	}
+
+	// payload, err := json.Marshal(eventData)
+	// if err != nil {
+	// 	span.RecordError(err)
+	// 	http.Error(w, "Failed to marshal user data", http.StatusInternalServerError)
+	// 	return
+	// }
+
 	// ✅ Kirim ke Kafka
-	if err := h.UserUC.CreateUser(ctx, &user); err != nil {
+	err = h.Producer.Publish("user-events", eventData, "user.created")
+
+	if err != nil {
 		span.RecordError(err)
-		http.Error(w, "Failed to send create event", http.StatusInternalServerError)
+		http.Error(w, "Failed to send event to Kafka", http.StatusInternalServerError)
 		return
 	}
 

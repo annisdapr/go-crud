@@ -3,11 +3,14 @@ package delivery
 import (
 	"context"
 	deliveryHTTP "go-crud/delivery/http"
+	"go-crud/internal/kafka"
+	"go-crud/internal/repository"
 	"go-crud/internal/usecase"
 	"go-crud/internal/validator"
-	"go-crud/internal/repository"
-	"go.mongodb.org/mongo-driver/mongo"
+	"log"
+	"os"
 
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,11 +21,16 @@ func NewRouter(userUC usecase.IUserUsecase, repoUC usecase.IRepositoryUsecase, c
 	r := chi.NewRouter()
 // ✅ Inisialisasi validator
 	validator := validator.NewValidator()
-
 	auditRepo := repository.NewAuditLogMongoRepository(mongoClient.Database("audit_log_db"))
+	broker := os.Getenv("KAFKA_BROKER")
+	kafkaProducer, err := kafka.NewKafkaProducer(broker)
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize Kafka producer: %v", err)
+	}
+
 
 	// ✅ Inject ke handler
-	userHandler := deliveryHTTP.NewUserHandler(userUC, validator, auditRepo)
+	userHandler := deliveryHTTP.NewUserHandler(userUC, validator, auditRepo, *kafkaProducer)
 
 	r.Post("/users", userHandler.CreateUser)
 	r.Get("/users", userHandler.GetAllUsers)

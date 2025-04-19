@@ -83,14 +83,7 @@ func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error 
 		return fmt.Errorf("email already in use")
 	}
 
-	// Kirim event user.created (tidak menyimpan ke DB, hanya publish)
-	if err := uc.EventPublisher.PublishUserCreated(ctx, user); err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("failed to publish user.created event: %w", err)
-	}
-
-	// Tidak menyimpan ke DB di sini
-	return nil
+	return uc.UserRepo.CreateUser(ctx, user)
 }
 
 

@@ -35,7 +35,10 @@ func (kp *KafkaProducer) Publish(topic string, message interface{}, eventType st
 			payload[k] = v
 		}
 	} else {
+		
 		messageBytes, _ := json.Marshal(message)
+	log.Printf("📦 Message JSON before Unmarshal: %s\n", string(messageBytes))
+
 		json.Unmarshal(messageBytes, &payload)
 	}
 

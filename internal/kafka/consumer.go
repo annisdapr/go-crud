@@ -25,7 +25,7 @@ func NewKafkaConsumer(
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  broker,
 		"group.id":           groupID,
-		"auto.offset.reset":  "earliest", // atau "latest" tergantung kebutuhan
+		"auto.offset.reset":  "latest", // atau "latest" tergantung kebutuhan
 		"enable.auto.commit": true,       // ✅ AUTO COMMIT DIHIDUPKAN
 		"auto.commit.interval.ms": 5000,  // (opsional) commit tiap 5 detik
 	})
@@ -51,6 +51,16 @@ func NewKafkaConsumer(
 		repoUsecase: repoUC,
 	}, nil
 	
+}
+
+// ✨ Ambil nilai "eventType" dari headers
+func getEventTypeFromHeaders(headers []kafka.Header) string {
+	for _, h := range headers {
+		if h.Key == "eventType" {
+			return string(h.Value)
+		}
+	}
+	return ""
 }
 
 func (kc *KafkaConsumer) Start(ctx context.Context) {
@@ -80,20 +90,22 @@ func (kc *KafkaConsumer) Start(ctx context.Context) {
 			}
 
 			topic := *msg.TopicPartition.Topic
+			eventType := getEventTypeFromHeaders(msg.Headers)
+
 			log.Printf("📋 Routing event by topic: %s\n", topic)
-			kc.routeEventByTopic(ctx, topic, event)
+			kc.routeEventByTopic(ctx, topic, event, eventType)
 		}
 	}
 }
 
-func (kc *KafkaConsumer) routeEventByTopic(ctx context.Context, topic string, event map[string]interface{}) {
+func (kc *KafkaConsumer) routeEventByTopic(ctx context.Context, topic string, event map[string]interface{}, eventType string) {
 	log.Printf("📥 Processing event from topic: %s\n", topic)
 	log.Printf("📥 Processing event from topic: %s\n", topic)
 	log.Printf("🧾 Event payload received: %+v\n", event) 
 
 	switch topic {
 	case "user-events":
-		kc.processUserEvent(ctx, event)
+		kc.processUserEvent(ctx, event, eventType)
 
 	case "repository-events":
 		kc.processRepositoryEvent(ctx, event)
@@ -103,7 +115,6 @@ func (kc *KafkaConsumer) routeEventByTopic(ctx context.Context, topic string, ev
 	}
 }
 
-
 func isUserEvent(eventType string) bool {
 	return eventType == "user.created" || eventType == "user.updated" || eventType == "user.deleted"
 }
@@ -112,8 +123,7 @@ func isRepoEvent(eventType string) bool {
 	return eventType == "repository.created" || eventType == "repository.updated" || eventType == "repository.deleted"
 }
 
-func (kc *KafkaConsumer) processUserEvent(ctx context.Context, event map[string]interface{}) {
-	eventType := fmt.Sprintf("%v", event["event"])
+func (kc *KafkaConsumer) processUserEvent(ctx context.Context, event map[string]interface{}, eventType string) {
 	log.Printf("🔍 Handling user event type: %s | Data: %+v\n", eventType, event)
 
 	switch eventType {
