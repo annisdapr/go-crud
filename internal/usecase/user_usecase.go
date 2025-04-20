@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go-crud/internal/circuitbreaker"
 	"go-crud/internal/entity"
 	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
-	"go-crud/internal/circuitbreaker"
 	"go-crud/internal/usecase/port"
 
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sony/gobreaker"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 
@@ -68,20 +69,14 @@ func (uc *UserUsecase) IsEmailExists(ctx context.Context, email string) (bool, e
 	return true, nil
 }
 
-// ✅ Validasi dan kirim event untuk user creation
 func (uc *UserUsecase) CreateUser(ctx context.Context, user *entity.User) error {
 	ctx, span := tracing.Tracer.Start(ctx, "UserUsecase.CreateUser")
 	defer span.End()
 
-	// Cek apakah email sudah digunakan
-	exists, err := uc.IsEmailExists(ctx, user.Email)
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("failed to check email existence: %w", err)
-	}
-	if exists {
-		return fmt.Errorf("email already in use")
-	}
+	span.SetAttributes(
+		attribute.String("user.name", user.Name),
+		attribute.String("user.email", user.Email),
+	)
 
 	return uc.UserRepo.CreateUser(ctx, user)
 }
@@ -152,5 +147,5 @@ func (uc *UserUsecase) DeleteUser(ctx context.Context, id int) error {
 	defer span.End()
 
 	// Tidak hapus langsung dari DB
-	return nil
+	return uc.UserRepo.DeleteUser(ctx, id)
 }

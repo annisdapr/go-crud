@@ -3,6 +3,7 @@ package cbreaker
 import (
 	"log"
 	"time"
+	"go-crud/internal/notifier"
 
 	"github.com/sony/gobreaker"
 )
@@ -28,7 +29,7 @@ func NewBreaker(name string) *gobreaker.CircuitBreaker {
 	return gobreaker.NewCircuitBreaker(settings)
 }
 
-// Logging perubahan state circuit breaker
+
 func logStateChange(name string, from, to gobreaker.State) {
 	stateToStr := map[gobreaker.State]string{
 		gobreaker.StateClosed:   "CLOSED",
@@ -36,5 +37,12 @@ func logStateChange(name string, from, to gobreaker.State) {
 		gobreaker.StateHalfOpen: "HALF-OPEN",
 	}
 
-	log.Printf("⚡ Circuit Breaker [%s] berubah dari %s ke %s", name, stateToStr[from], stateToStr[to])
+	msg := "⚡ Circuit Breaker [" + name + "] berubah dari " + stateToStr[from] + " ke " + stateToStr[to]
+	log.Println(msg)
+
+	// ✅ Kirim alert ke Telegram
+	notifier := notifier.NewTelegramNotifier()
+	if err := notifier.SendMessage(msg); err != nil {
+		log.Printf("❌ Gagal kirim notifikasi Telegram: %v", err)
+	}
 }

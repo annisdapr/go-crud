@@ -3,11 +3,11 @@ package http
 import (
 	"encoding/json"
 	"go-crud/internal/entity"
+	"go-crud/internal/kafka"
+	"go-crud/internal/repository"
 	"go-crud/internal/tracing"
 	"go-crud/internal/usecase"
 	"go-crud/internal/validator"
-	"go-crud/internal/repository"
-	"go-crud/internal/kafka"
 	"net/http"
 	"strconv"
 
@@ -75,13 +75,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		"name":  user.Name,
 		"email": user.Email,
 	}
-
-	// payload, err := json.Marshal(eventData)
-	// if err != nil {
-	// 	span.RecordError(err)
-	// 	http.Error(w, "Failed to marshal user data", http.StatusInternalServerError)
-	// 	return
-	// }
 
 	// ✅ Kirim ke Kafka
 	err = h.Producer.Publish("user-events", eventData, "user.created")
@@ -187,9 +180,25 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		attribute.String("user.email", input.Email),
 	)
 
-	if _, err := h.UserUC.UpdateUser(ctx, id, input); err != nil {
+	// if _, err := h.UserUC.UpdateUser(ctx, id, input); err != nil {
+	// 	span.RecordError(err)
+	// 	http.Error(w, "Failed to send update event", http.StatusInternalServerError)
+	// 	return
+	// }
+
+	
+	// ✅ Siapkan event data untuk Kafka
+	eventData := map[string]interface{}{
+		"id":    id,
+		"name":  input.Name,
+		"email": input.Email,
+	}
+
+	// ✅ Kirim event ke Kafka
+	err = h.Producer.Publish("user-events", eventData, "user.updated")
+	if err != nil {
 		span.RecordError(err)
-		http.Error(w, "Failed to send update event", http.StatusInternalServerError)
+		http.Error(w, "Failed to send update event to Kafka", http.StatusInternalServerError)
 		return
 	}
 
@@ -214,11 +223,28 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.UserUC.DeleteUser(ctx, id); err != nil {
-		span.RecordError(err)
-		http.Error(w, "Failed to send delete event", http.StatusInternalServerError)
-		return
-	}
+	// if err := h.UserUC.DeleteUser(ctx, id); err != nil {
+	// 	span.RecordError(err)
+	// 	http.Error(w, "Failed to send delete event", http.StatusInternalServerError)
+	// 	return
+	// }
+
+		// 📦 Buat event dan kirim ke Kafka
+		eventData := map[string]interface{}{
+			"id":    id,
+		}
+		// payload, err := json.Marshal(eventData)
+		// if err != nil {
+		// 	span.RecordError(err)
+		// 	http.Error(w, "Failed to marshal delete event", http.StatusInternalServerError)
+		// 	return
+		// }
+	
+		if err := h.Producer.Publish("user-events", eventData, "user.deleted"); err != nil {
+			span.RecordError(err)
+			http.Error(w, "Failed to publish delete event", http.StatusInternalServerError)
+			return
+		}
 
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
